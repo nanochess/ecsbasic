@@ -1,8 +1,8 @@
-#ECS extended BASIC
+# ECS extended BASIC
 
-##by Oscar Toledo G. https://nanochess.org/
+## by Oscar Toledo G. https://nanochess.org/
 
-###(c) Copyright 2025 Oscar Toledo G.
+### (c) Copyright 2025 Oscar Toledo G.
 
 This a BASIC language for the Intellivision Entertainment Computer System. I intend to make it as a (better) replacement for the incredibly slow Intellivision ECS BASIC.
 
