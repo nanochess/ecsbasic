@@ -8,18 +8,13 @@ This a BASIC language for the Intellivision Entertainment Computer System. I int
 
 It is written in CP1610 assembler language, and it only has been tested in emulation.
 
-For example this program:
+For example, this program runs in 15 seconds (modified from a benchmark by carlsson):
 
-    10 I=1
-    20 A=A+I
-    30 A=A*I
-    40 I=I+1
-    50 IF I<1001 THEN 20
-    60 PRINT A
+![image](shot0006.gif)
 
-Takes 15 seconds to execute with my BASIC language. And in the ECS BASIC it takes around 200 seconds.
+The same program for the Mattel ECS BASIC takes 210 seconds:
 
-![image](shot0004.gif)
+![image](shot0005.gif)
 
 There's no roadmap currently, and so far I've only implemented a core BASIC language. There are 26 variables (A-Z). The floating-point support is 25-bit mantissa, 7-bit exponent, and sign.
 
@@ -54,3 +49,6 @@ The following expression operators are supported:
     v
 
 Currently, the number input only allows for 16-bit integers, that are translated to floating-point. However, the number output is able to show fractions, and exponents.
+
+![image](shot0004.gif)
+
