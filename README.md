@@ -16,6 +16,8 @@ The same program for the Mattel ECS BASIC takes 210 seconds:
 
 ![image](shot0005.gif)
 
+The resulting value is meaningless because the calculations exceed completely the floating-point precision.
+
 There's no roadmap currently, and so far I've only implemented a core BASIC language. There are 26 variables (A-Z). The floating-point support is 25-bit mantissa, 7-bit exponent, and sign.
 
 The following statements are supported:
