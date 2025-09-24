@@ -9,7 +9,7 @@
 	;                             listing tokenized BASIC, and executing BASIC lines. Added
 	;            	              LIST, NEW, CLS, RUN, STOP, PRINT, and GOTO. Execution can
 	;                             be interrupted using the Esc key.
-	; Revision date: Sep/23/2025. Added INPUT statement.
+	; Revision date: Sep/23/2025. Added INPUT statement. Solved bug checking for Esc in GOTO.
 	;
 
 	ROMW 16
@@ -303,15 +303,15 @@ keywords_exec:
 	DECLE bas_syntax_error
 
 keywords:
-	DECLE ":",0
+	DECLE ":",0	; $0100
 	DECLE "LIST",0
 	DECLE "NEW",0
 	DECLE "CLS",0
-	DECLE "RUN",0
+	DECLE "RUN",0	; $0104
 	DECLE "STOP",0
 	DECLE "PRINT",0
 	DECLE "INPUT",0
-	DECLE "GOTO",0
+	DECLE "GOTO",0	; $0108
 	DECLE "IF",0
 	DECLE "THEN",0
 	DECLE "ELSE",0
@@ -992,7 +992,9 @@ bas_goto:	PROC
 	MVII #ERR_LINE,R0
 	CALL bas_error
 @@3:
+	PSHR R4
 	CALL SCAN_KBD
+	PULR R4
 	CMPI #KEY.ESC,R0
 	BNE @@4
 	MVII #ERR_STOP,R0
