@@ -5,6 +5,7 @@
 	; https://nanochess.org/
 	;
 	; Creation date: Sep/23/2025.
+	; Revision date: Sep/24/2025. Now it handles zero.
 	;
 
 	;
@@ -12,6 +13,15 @@
 	;
 fpprint:	PROC
 	PSHR R5
+	MOVR R1,R2
+	ANDI #$7F,R2	; Special case: Is it zero?
+	BNE @@14
+	MVII #$20,R0
+	CALL bas_output
+	MVII #$30,R0
+	CALL bas_output
+	PULR PC
+@@14:
 	MOVR R1,R2
 	MVII #$20,R3
 	ANDI #$80,R2

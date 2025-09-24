@@ -10,6 +10,7 @@
 	;            	              LIST, NEW, CLS, RUN, STOP, PRINT, and GOTO. Execution can
 	;                             be interrupted using the Esc key.
 	; Revision date: Sep/23/2025. Added INPUT statement. Solved bug checking for Esc in GOTO.
+	; Revision date: Sep/24/2025. Added ELSE statement.
 	;
 
 	ROMW 16
@@ -686,6 +687,8 @@ bas_execute_line:	PROC
 	CALL get_next
 	TSTR R0
 	BEQ @@1
+	CMPI #TOKEN_ELSE,R0
+	BEQ @@1
 	CMPI #TOKEN_COLON,R0
 	BEQ @@2
 	MVII #ERR_SYNTAX,R0
@@ -698,7 +701,10 @@ bas_execute_line:	PROC
 	;
 bas_execute:	PROC
 	PSHR R5
+@@0:
 	MVI@ R4,R0
+	CMPI #32,R0
+	BEQ @@0
 	CMPI #TOKEN_START,R0	; Token found?
 	BC @@2
 	; Try an assignment
@@ -869,6 +875,8 @@ bas_print:	PROC
 @@5:
 	TSTR R0
 	BEQ @@6
+	CMPI #TOKEN_ELSE,R0
+	BEQ @@6
 	CMPI #$22,R0
 	BNE @@2
 @@1:
@@ -919,6 +927,8 @@ bas_input:	PROC
 	CALL next_token
 @@5:
 	TSTR R0
+	BEQ @@6
+	CMPI #TOKEN_ELSE,R0
 	BEQ @@6
 	CMPI #$22,R0
 	BNE @@4
@@ -1032,12 +1042,25 @@ bas_if:	PROC
 	BNE @@1
 	PULR R5
 	B bas_goto
-@@1:	
-	; !!! Implement ELSE
-	MVI@ R4,R0
-	TSTR R0
-	BNE @@1
-	DECR R4
+
+@@1:	CLRR R5
+@@6:
+	PSHR R5
+	CALL next_token
+	PULR R5
+	TSTR R0		; Reached end of line?
+	BEQ @@4		; Yes, no ELSE found.
+	CMPI #TOKEN_THEN,R0
+	BNE @@5
+	INCR R5		; Increase depth.
+@@5:	CMPI #TOKEN_ELSE,R0
+	BNE @@6
+	DECR R5		; Decrease depth.
+	BNE @@6
+	PULR R5
+	B bas_execute
+
+@@4:	DECR R4
 	PULR PC
 	ENDP
 
@@ -1146,12 +1169,12 @@ bas_expr:	PROC
 @@1:	DECR R4
 	PULR PC
 
-@@true:	CLRR R0
-	MVII #$00BF,R1
+@@true:	CLRR R2
+	MVII #$00BF,R3
 	PULR PC
 
-@@false:	CLRR R0
-	CLRR R1
+@@false:	CLRR R2
+	CLRR R3
 	PULR PC
 
 	ENDP
