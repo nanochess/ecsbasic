@@ -19,23 +19,32 @@
 basic_buffer:	EQU $8040
 variables:	EQU $8080
 program_start:	EQU $80C0
+memory_limit:	EQU $9F00
+start_for:	EQU memory_limit-64
+end_for:	EQU memory_limit
+start_gosub:	EQU memory_limit-128
+end_gosub:	EQU memory_limit-64
 TOKEN_START:	EQU $0100
 TOKEN_COLON:	EQU $0100
 TOKEN_GOTO:	EQU $0108
 TOKEN_IF:	EQU $0109
 TOKEN_THEN:	EQU $010a
 TOKEN_ELSE:	EQU $010b
-TOKEN_LE:	EQU $010c
-TOKEN_GE:	EQU $010d
-TOKEN_NE:	EQU $010e
-TOKEN_EQ:	EQU $010f
-TOKEN_LT:	EQU $0110
-TOKEN_GT:	EQU $0111
+TOKEN_TO:	EQU $010d
+TOKEN_STEP:	EQU $010e
+TOKEN_LE:	EQU $0112
+TOKEN_GE:	EQU $0113
+TOKEN_NE:	EQU $0114
+TOKEN_EQ:	EQU $0115
+TOKEN_LT:	EQU $0116
+TOKEN_GT:	EQU $0117
 
 ERR_TITLE:	EQU 0
 ERR_SYNTAX:	EQU 1
 ERR_STOP:	EQU 2
 ERR_LINE:	EQU 3
+ERR_GOSUB:	EQU 4
+ERR_RETURN:	EQU 5
 
 KEY.LEFT    EQU     $1C     ; \   Can't be generated otherwise, so perfect
 KEY.RIGHT   EQU     $1D     ;  |_ candidates.  Could alternately send 8 for
@@ -296,12 +305,12 @@ keywords_exec:
 	DECLE bas_if
 	DECLE bas_syntax_error
 	DECLE bas_syntax_error
+	DECLE bas_syntax_error	; FOR
 	DECLE bas_syntax_error
 	DECLE bas_syntax_error
-	DECLE bas_syntax_error
-	DECLE bas_syntax_error
-	DECLE bas_syntax_error
-	DECLE bas_syntax_error
+	DECLE bas_syntax_error	; NEXT
+	DECLE bas_gosub
+	DECLE bas_return
 
 keywords:
 	DECLE ":",0	; $0100
@@ -316,7 +325,13 @@ keywords:
 	DECLE "IF",0
 	DECLE "THEN",0
 	DECLE "ELSE",0
-	DECLE "<=",0
+	DECLE "FOR",0	; $010C
+	DECLE "TO",0
+	DECLE "STEP",0
+	DECLE "NEXT",0
+	DECLE "GOSUB",0	; $0110
+	DECLE "RETURN",0
+	DECLE "<=",0	; $0112
 	DECLE ">=",0
 	DECLE "<>",0
 	DECLE "=",0
@@ -331,7 +346,9 @@ errors:
 	DECLE "Syntax error",0
 	DECLE "STOP",0
 	DECLE "Undefined",0
-
+	DECLE "Too many GOSUB",0
+	DECLE "RETURN without GOSUB",0
+	
 	;
 	; Read a line from the input
 	;
@@ -843,6 +860,10 @@ bas_cls:	PROC
 	;
 bas_run:	PROC
 	MVII #STACK,R6
+	MVII #start_for,R0
+	MVO R0,bas_forptr
+	MVII #start_gosub,R0
+	MVO R0,bas_gosubptr
 	MVII #program_start,R4
 @@1:
 	MVI@ R4,R0
@@ -1062,6 +1083,107 @@ bas_if:	PROC
 
 @@4:	DECR R4
 	PULR PC
+	ENDP
+
+	;
+	; Get next point for execution
+	;
+get_next_point:	PROC
+	PSHR R5
+	MVI bas_curline,R1
+@@2:
+	MVI@ R4,R0
+	TSTR R0
+	BEQ @@1
+	CMPI #32,R0
+	BEQ @@2
+	CMPI #TOKEN_COLON,R0
+	BEQ @@3
+	B @@4
+
+@@1:	MVI@ R4,R1
+	TSTR R1		; No more lines?
+	BEQ @@4
+	INCR R4
+	B @@3
+@@4:
+	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+@@3:
+	PULR PC
+	ENDP
+
+	;
+	; GOSUB
+	;
+bas_gosub:	PROC
+	PSHR R5
+	; !!! Change for expression evaluation
+	CLRR R2
+	CALL next_token
+@@1:	CMPI #$30,R0
+	BNC @@2
+	CMPI #$3A,R0
+	BC @@2
+	SUBI #$30,R0
+	MOVR R2,R1
+	ADDR R2,R2		; x2
+	ADDR R2,R2		; x4
+	ADDR R1,R2		; x5
+	ADDR R2,R2		; x10
+	ADDR R0,R2
+	MVI@ R4,R0
+	B @@1
+
+@@2:	DECR R4
+	CALL get_next_point
+	MVI bas_gosubptr,R5
+	CMPI #end_gosub-2,R5
+	BC @@5
+	MVO@ R4,R5
+	MVO@ R1,R5
+	MVO R5,bas_gosubptr
+	MOVR R2,R0
+	CALL line_search
+	CMPR R1,R0
+	BEQ @@3
+	MVII #ERR_LINE,R0
+	CALL bas_error
+@@3:
+	PSHR R4
+	CALL SCAN_KBD
+	PULR R4
+	CMPI #KEY.ESC,R0
+	BNE @@4
+	MVII #ERR_STOP,R0
+	CALL bas_error
+@@4:
+	MVII #STACK,R6
+	B bas_run.1
+	PULR PC
+
+@@5:	MVII #ERR_GOSUB,R0
+	CALL bas_error
+	ENDP
+
+	;
+	; RETURN
+	;
+bas_return:	PROC
+	PSHR R5
+	MVI bas_gosubptr,R5
+	CMPI #start_gosub,r5
+	BNE @@1
+	MVII #ERR_RETURN,R0
+	CALL bas_error
+@@1:	DECR R5
+	DECR R5
+	MVO R5,bas_gosubptr
+	MVI@ R5,R4
+	MVI@ R5,R1
+	MVO R1,bas_curline
+	PULR R5
+	B bas_execute
 	ENDP
 
 	;
@@ -1817,6 +1939,8 @@ bas_ttypos:	RMB 1	; Current position on screen.
 bas_color:	RMB 1	; Current color.
 bas_card:	RMB 1	; Card under the cursor.
 bas_curline:	RMB 1	; Current line in execution (0 for direct command)
+bas_forptr:	RMB 1	; Stack for FOR loops.
+bas_gosubptr:	RMB 1	; Stack for GOSUB/RETURN.
 program_end:	RMB 1	; Pointer to program's end.
 
 SCRATCH:    ORG $100,$100,"-RWBN"
