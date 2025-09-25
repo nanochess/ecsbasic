@@ -11,7 +11,8 @@
 	;                             be interrupted using the Esc key.
 	; Revision date: Sep/23/2025. Added INPUT statement. Solved bug checking for Esc in GOTO.
 	; Revision date: Sep/24/2025. Added ELSE statement. Added GOSUB/RETURN. Added FOR/NEXT.
-	;                             Added negation operator.
+	;                             Added negation operator. Added functions INT, ABS, SGN, and
+	;                             RND.
 	;
 
 	ROMW 16
@@ -33,12 +34,19 @@ TOKEN_THEN:	EQU $010a
 TOKEN_ELSE:	EQU $010b
 TOKEN_TO:	EQU $010d
 TOKEN_STEP:	EQU $010e
+
 TOKEN_LE:	EQU $0112
 TOKEN_GE:	EQU $0113
 TOKEN_NE:	EQU $0114
 TOKEN_EQ:	EQU $0115
 TOKEN_LT:	EQU $0116
 TOKEN_GT:	EQU $0117
+
+TOKEN_FUNC:	EQU $0118
+TOKEN_INT:	EQU $0118
+TOKEN_ABS:	EQU $0119
+TOKEN_SGN:	EQU $011A
+TOKEN_RND:	EQU $011B
 
 ERR_TITLE:	EQU 0
 ERR_SYNTAX:	EQU 1
@@ -343,6 +351,10 @@ keywords:
 	DECLE "=",0
 	DECLE "<",0
 	DECLE ">",0
+	DECLE "INT",0
+	DECLE "ABS",0
+	DECLE "SGN",0
+	DECLE "RND",0
 	DECLE 0
 
 at_line:
@@ -901,6 +913,8 @@ bas_print:	PROC
 @@5:
 	TSTR R0
 	BEQ @@6
+	CMPI #TOKEN_COLON,R0
+	BEQ @@6
 	CMPI #TOKEN_ELSE,R0
 	BEQ @@6
 	CMPI #$22,R0
@@ -953,6 +967,8 @@ bas_input:	PROC
 	CALL next_token
 @@5:
 	TSTR R0
+	BEQ @@6
+	CMPI #TOKEN_COLON,R0
 	BEQ @@6
 	CMPI #TOKEN_ELSE,R0
 	BEQ @@6
@@ -1568,7 +1584,11 @@ bas_expr3:	PROC
 	CMPI #$2D,R0	; Minus?
 	BNE @@1
 	CALL bas_expr4
-	XORI #$80,R3
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fpneg
+	MOVR R0,R2
+	MOVR R1,R3
 	PULR PC
 
 @@1:	DECR R4
@@ -1579,6 +1599,62 @@ bas_expr3:	PROC
 bas_expr4:	PROC
 	PSHR R5
 	CALL next_token
+	
+	CMPI #TOKEN_FUNC,R0
+	BNC @@6
+	CMPI #TOKEN_RND,R0
+	BNE @@7
+	PSHR R4
+	CALL fprnd
+	PULR R4
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR PC
+@@7:
+	PSHR R0
+	CALL next_token
+	CMPI #$28,R0
+	BNE @@2
+	CALL bas_expr
+	CALL next_token
+	CMPI #$29,R0
+	BNE @@2
+	PULR R0
+	CMPI #TOKEN_INT,R0
+	BEQ @@8
+	CMPI #TOKEN_SGN,R0
+	BEQ @@9
+	CMPI #TOKEN_ABS,R0
+	BEQ @@10
+
+@@8:	MOVR R2,R0
+	MOVR R3,R1
+	PSHR R4
+	CALL fpint
+	PULR R4
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR PC
+
+@@9:	MOVR R2,R0
+	MOVR R3,R1
+	PSHR R4
+	CALL fpsgn
+	PULR R4
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR PC
+
+@@10:	MOVR R2,R0
+	MOVR R3,R1
+	PSHR R4
+	CALL fpabs
+	PULR R4
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR PC
+
+@@6:
 	CMPI #$28,R0	; Parenthesis?
 	BNE @@5
 	CALL bas_expr
@@ -2117,6 +2193,12 @@ _int_vector:     PROC
 	INCR R0
 	MVO R0,_frame
 
+	MVI lfsr,R0
+	INCR R0
+	INCR R0
+	INCR R0
+	MVO R0,lfsr
+
 	RETURN
 	ENDP
 
@@ -2133,6 +2215,7 @@ _col4:      RMB 1       ; Collision status for MOB4
 _col5:      RMB 1       ; Collision status for MOB5
 _col6:      RMB 1       ; Collision status for MOB6
 _col7:      RMB 1       ; Collision status for MOB7
+_mobs:	RMB 24
 bas_firstpos:	RMB 1	; First position of cursor.
 bas_ttypos:	RMB 1	; Current position on screen.
 bas_color:	RMB 1	; Current color.
@@ -2141,6 +2224,7 @@ bas_curline:	RMB 1	; Current line in execution (0 for direct command)
 bas_forptr:	RMB 1	; Stack for FOR loops.
 bas_gosubptr:	RMB 1	; Stack for GOSUB/RETURN.
 program_end:	RMB 1	; Pointer to program's end.
+lfsr:		RMB 1	; Random number
 
 SCRATCH:    ORG $100,$100,"-RWBN"
 	;

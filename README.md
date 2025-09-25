@@ -58,6 +58,10 @@ The following expression operators are supported:
     (expr)
     num
     v
+    INT(expr)
+    ABS(expr)
+    SGN(expr)
+    RND
 
 Currently, the number input only allows for 16-bit integers, that are translated to floating-point. However, the number output is able to show fractions, and exponents.
 

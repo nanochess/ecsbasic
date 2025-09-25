@@ -12,11 +12,12 @@
 	;                             fpceil. Corrrected bug in fpmul.
 	; Revision date: Sep/22/2025. fpmul speed-up. Corrected bug in rounding (so now
 	;                             1.0 / 3.0 * 3.0 = 1.0)
+	; Revision date: Sep/24/2025. Added fprnd.
 	;
 
 	; Temporary
-fptemp1:	EQU $030d
-fptemp2:	EQU $030e
+fptemp1:	EQU $0317
+fptemp2:	EQU $0318
 
 FPEXP_BIAS:	EQU $3F	; The base exponent for value 1.0
 
@@ -649,6 +650,9 @@ fpsgn:	PROC
 	MOVR R5,PC	
 	ENDP
 
+	;
+	; Divide a number by 2 (moving the exponent)
+	;
 fpdivby2:	PROC
 	DECR R1
 	MOVR R1,R2
@@ -660,6 +664,9 @@ fpdivby2:	PROC
 	MOVR R5,PC
 	ENDP
 
+	;
+	; Multiply a number by 2 (moving the exponent)
+	;
 fpmulby2:	PROC
 	MOVR R1,R2
 	ANDI #$7F,R2
@@ -670,4 +677,38 @@ fpmulby2:	PROC
 	ADDI #$FF7E,R1
 @@1:	INCR R1
 	MOVR R5,PC
+	ENDP
+
+	;
+	; Generate a random number
+	; From my game Mecha Eight.
+	;
+fprnd:	PROC
+	PSHR R5
+	MVI lfsr,r0
+	TSTR R0
+	BNE @@1
+	MVII #$7811,R0
+@@1:	MOVR R0,R2
+	ANDI #$8000,R2
+	MOVR R0,R1
+	ANDI #$0020,R1
+	BEQ @@3
+	XORI #$8000,R2
+@@3:	MOVR R0,R1
+	ANDI #$0100,R1
+	BEQ @@4
+	XORI #$8000,R2
+@@4:	MOVR R0,R1
+	ANDI #$0004,R1
+	BEQ @@5
+	XORI #$8000,R2
+@@5:	RLC R2,1
+	RRC R0,1
+	MVO R0,lfsr
+	CLRR R1
+	PSHR R1
+	MVII #$3F,R5
+	; Reuse the normalize code.
+	B fpadd.11	; Normalize
 	ENDP
