@@ -12,7 +12,7 @@
 	; Revision date: Sep/23/2025. Added INPUT statement. Solved bug checking for Esc in GOTO.
 	; Revision date: Sep/24/2025. Added ELSE statement. Added GOSUB/RETURN. Added FOR/NEXT.
 	;                             Added negation operator. Added functions INT, ABS, SGN, and
-	;                             RND.
+	;                             RND. Added REM, RESTORE, READ, and DATA.
 	;
 
 	ROMW 16
@@ -35,18 +35,20 @@ TOKEN_ELSE:	EQU $010b
 TOKEN_TO:	EQU $010d
 TOKEN_STEP:	EQU $010e
 
-TOKEN_LE:	EQU $0112
-TOKEN_GE:	EQU $0113
-TOKEN_NE:	EQU $0114
-TOKEN_EQ:	EQU $0115
-TOKEN_LT:	EQU $0116
-TOKEN_GT:	EQU $0117
+TOKEN_DATA:	EQU $0115
 
-TOKEN_FUNC:	EQU $0118
-TOKEN_INT:	EQU $0118
-TOKEN_ABS:	EQU $0119
-TOKEN_SGN:	EQU $011A
-TOKEN_RND:	EQU $011B
+TOKEN_LE:	EQU $0116
+TOKEN_GE:	EQU $0117
+TOKEN_NE:	EQU $0118
+TOKEN_EQ:	EQU $0119
+TOKEN_LT:	EQU $011A
+TOKEN_GT:	EQU $011B
+
+TOKEN_FUNC:	EQU $011C
+TOKEN_INT:	EQU $011C
+TOKEN_ABS:	EQU $011D
+TOKEN_SGN:	EQU $011E
+TOKEN_RND:	EQU $011F
 
 ERR_TITLE:	EQU 0
 ERR_SYNTAX:	EQU 1
@@ -56,6 +58,7 @@ ERR_GOSUB:	EQU 4
 ERR_RETURN:	EQU 5
 ERR_FOR:	EQU 6
 ERR_NEXT:	EQU 7
+ERR_DATA:	EQU 8
 
 KEY.LEFT    EQU     $1C     ; \   Can't be generated otherwise, so perfect
 KEY.RIGHT   EQU     $1D     ;  |_ candidates.  Could alternately send 8 for
@@ -325,6 +328,10 @@ keywords_exec:
 	DECLE bas_next		; NEXT
 	DECLE bas_gosub
 	DECLE bas_return
+	DECLE bas_rem
+	DECLE bas_restore
+	DECLE bas_read
+	DECLE bas_data
 
 keywords:
 	DECLE ":",0	; $0100
@@ -345,7 +352,11 @@ keywords:
 	DECLE "NEXT",0
 	DECLE "GOSUB",0	; $0110
 	DECLE "RETURN",0
-	DECLE "<=",0	; $0112
+	DECLE "REM",0
+	DECLE "RESTORE",0
+	DECLE "READ",0	; $0114
+	DECLE "DATA",0
+	DECLE "<=",0	; $0116
 	DECLE ">=",0
 	DECLE "<>",0
 	DECLE "=",0
@@ -368,6 +379,7 @@ errors:
 	DECLE "RETURN w/o GOSUB",0
 	DECLE "Too many FOR",0
 	DECLE "NEXT w/o FOR",0
+	DECLE "No DATA found",0
 	
 	;
 	; Read a line from the input
@@ -780,17 +792,6 @@ bas_execute:	PROC
 	ENDP
 
 	;
-	; Get the next token, avoids spaces
-	;
-next_token:	PROC
-@@1:
-	MVI@ R4,R0
-	CMPI #32,R0
-	BEQ @@1
-	MOVR R5,PC
-	ENDP
-
-	;
 	; List the program
 	;
 bas_list:	PROC
@@ -889,6 +890,8 @@ bas_run:	PROC
 	MVO R0,bas_forptr
 	MVII #start_gosub,R0
 	MVO R0,bas_gosubptr
+	CALL data_locate
+	MVO R0,bas_dataptr
 	MVII #program_start,R4
 @@1:
 	CALL bas_execute_line
@@ -909,7 +912,7 @@ bas_stop:	PROC
 bas_print:	PROC
 	PSHR R5
 @@3:
-	CALL next_token
+	CALL get_next
 @@5:
 	TSTR R0
 	BEQ @@6
@@ -930,7 +933,7 @@ bas_print:	PROC
 	
 @@2:	CMPI #$3B,R0
 	BNE @@4
-	CALL next_token
+	CALL get_next
 	TSTR R0
 	BNE @@5
 	PULR PC
@@ -964,7 +967,7 @@ bas_print:	PROC
 bas_input:	PROC
 	PSHR R5
 @@3:
-	CALL next_token
+	CALL get_next
 @@5:
 	TSTR R0
 	BEQ @@6
@@ -983,10 +986,10 @@ bas_input:	PROC
 	PULR R4
 	B @@1
 	
-@@2:	CALL next_token
+@@2:	CALL get_next
 	CMPI #$3B,R0
 	BNE @@6
-	CALL next_token
+	CALL get_next
 @@4:
 	CMPI #$41,R0
 	BNC @@6
@@ -1022,7 +1025,7 @@ bas_goto:	PROC
 	PSHR R5
 	; !!! Change for expression evaluation
 	CLRR R2
-	CALL next_token
+	CALL get_next
 @@1:	CMPI #$30,R0
 	BNC @@2
 	CMPI #$3A,R0
@@ -1064,10 +1067,10 @@ bas_if:	PROC
 	CALL bas_expr
 	ANDI #$7F,R3		; Is it zero?
 	BEQ @@1			; Yes, jump.
-	CALL next_token
+	CALL get_next
 	CMPI #TOKEN_THEN,R0
 	BNE @@2
-	CALL next_token
+	CALL get_next
 	CMPI #$30,R0
 	BNC @@3
 	CMPI #$3A,R0
@@ -1088,7 +1091,7 @@ bas_if:	PROC
 @@1:	CLRR R5
 @@6:
 	PSHR R5
-	CALL next_token
+	CALL get_next
 	PULR R5
 	TSTR R0		; Reached end of line?
 	BEQ @@4		; Yes, no ELSE found.
@@ -1321,7 +1324,7 @@ bas_gosub:	PROC
 	PSHR R5
 	; !!! Change for expression evaluation
 	CLRR R2
-	CALL next_token
+	CALL get_next
 @@1:	CMPI #$30,R0
 	BNC @@2
 	CMPI #$3A,R0
@@ -1388,6 +1391,189 @@ bas_return:	PROC
 	ENDP
 
 	;
+	; REM
+	;
+bas_rem:	PROC
+@@1:	MVI@ R4,R0
+	TSTR R0
+	BNE @@1
+	DECR R4
+	MOVR R5,PC
+	ENDP
+
+	;
+	; Locate the first DATA statement in the program
+	;
+data_locate:	PROC
+	PSHR R5
+	MVII #program_start,R4
+@@3:	MVI@ R4,R0
+	INCR R4
+	TSTR R0
+	BEQ @@1
+@@2:	MVI@ R4,R0
+	TSTR R0
+	BEQ @@3
+	CMPI #TOKEN_DATA,R0
+	BNE @@2
+	MOVR R4,R0
+	PULR PC
+
+@@1:	CLRR R0
+	PULR PC
+	ENDP
+
+	;
+	; RESTORE
+	;
+bas_restore:	PROC
+	PSHR R5
+	CALL get_next
+	CMPI #$30,R0
+	BNC @@1
+	CMPI #$3A,R0
+	BC @@1
+	CLRR R2
+@@4:
+	SUBI #$30,R0
+	MOVR R2,R1
+	ADDR R2,R2		; x2
+	ADDR R2,R2		; x4
+	ADDR R1,R2		; x5
+	ADDR R2,R2		; x10
+	ADDR R0,R2
+	MVI@ R4,R0
+	CMPI #$30,R0
+	BNC @@3
+	CMPI #$3A,R0
+	BNC @@4
+@@3:	DECR R4
+	PSHR R4
+	MOVR R2,R0
+	CALL line_search
+	CMPR R1,R0
+	BNE @@5		; Jump if not found.
+	INCR R4
+	INCR R4
+@@7:
+	MVI@ R4,R0
+	TSTR R0
+	BEQ @@6
+	CMPI #TOKEN_DATA,R0
+	BNE @@7
+	B @@2
+	; No line number
+@@1:	DECR R4
+	PSHR R4
+	CALL data_locate
+	TSTR R0
+	BEQ @@6
+	MOVR R0,R4
+@@2:	MVO R4,bas_dataptr
+	PULR R4
+	PULR PC
+
+@@6:
+	MVII #ERR_DATA,R0
+	CALL bas_error
+@@5:
+	MVII #ERR_LINE,R0
+	CALL bas_error
+	ENDP
+
+	;
+	; READ
+	;
+bas_read:	PROC
+	PSHR R5
+@@12:
+	CALL get_next
+	CMPI #$41,R0		; Variable name?
+	BNC @@2
+	CMPI #$5B,R0
+	BC @@2			; No, jump.
+	CALL get_var_addr
+	PSHR R4
+	PSHR R5
+	MVI bas_dataptr,R4
+	TSTR R4
+	BEQ @@6
+@@8	MVI@ R4,R0
+	TSTR R0		; End of line found?
+	BEQ @@5
+	CMPI #$20,R0	; Avoid spaces
+	BEQ @@8
+	CMPI #$2D,R0
+	BEQ @@3
+	CMPI #$30,R0
+	BNC @@4
+	CMPI #$3A,R0
+	BNC @@3
+	CMPI #$2E,R0
+	BEQ @@3
+
+	; Number identified.
+@@3:	CALL parse_number
+	PULR R5
+	MVO@ R0,R5	; Save into variable
+	MVO@ R1,R5
+@@11:
+	MVI@ R4,R0
+	TSTR R0
+	BEQ @@9
+	CMPI #$20,R0
+	BEQ @@11
+	CMPI #$2C,R0
+	BNE @@11
+	B @@10
+@@9:	DECR R4
+@@10:	MVO R4,bas_dataptr
+	PULR R4
+	CALL get_next
+	CMPI #$2C,R0
+	BEQ @@12
+	DECR R4
+	PULR PC
+
+@@4:
+	; End of line
+@@5:	MVI@ R4,R0
+	TSTR R0		; End of program?
+	BEQ @@6
+	INCR R4
+@@7:	MVI@ R4,R0
+	TSTR R0
+	BEQ @@5
+	CMPI #TOKEN_DATA,R0
+	BNE @@7
+	B @@8
+
+	PULR R5
+	PULR R4
+
+@@6:	MVII #ERR_DATA,R0
+	CALL bas_error
+
+@@2:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+	PULR PC
+	ENDP
+
+	;
+	; DATA
+	;
+bas_data:	PROC
+@@1:	MVI@ R4,R0
+	CMPI #TOKEN_COLON,R0
+	BEQ @@2
+	TSTR R0
+	BNE @@1
+@@2:
+	DECR R4
+	MOVR R5,PC
+	ENDP
+
+	;
 	; Syntax error (reserved keyword at wrong place) 
 	;
 bas_syntax_error:	PROC
@@ -1401,7 +1587,7 @@ bas_syntax_error:	PROC
 bas_expr:	PROC
 	PSHR R5
 	CALL bas_expr1
-	CALL next_token
+	CALL get_next
 	CMPI #TOKEN_LE,R0
 	BNC @@1
 	CMPI #TOKEN_GT+1,R0
@@ -1506,7 +1692,7 @@ bas_expr1:	PROC
 	PSHR R5
 	CALL bas_expr2
 @@0:
-	CALL next_token
+	CALL get_next
 	CMPI #$2b,R0
 	BNE @@1
 	PSHR R2
@@ -1544,7 +1730,7 @@ bas_expr2:	PROC
 	PSHR R5
 	CALL bas_expr3
 @@0:
-	CALL next_token
+	CALL get_next
 	CMPI #$2a,R0
 	BNE @@1
 	PSHR R2
@@ -1580,7 +1766,7 @@ bas_expr2:	PROC
 
 bas_expr3:	PROC
 	PSHR R5
-	CALL next_token
+	CALL get_next
 	CMPI #$2D,R0	; Minus?
 	BNE @@1
 	CALL bas_expr4
@@ -1598,7 +1784,7 @@ bas_expr3:	PROC
 
 bas_expr4:	PROC
 	PSHR R5
-	CALL next_token
+	CALL get_next
 	
 	CMPI #TOKEN_FUNC,R0
 	BNC @@6
@@ -1612,11 +1798,11 @@ bas_expr4:	PROC
 	PULR PC
 @@7:
 	PSHR R0
-	CALL next_token
+	CALL get_next
 	CMPI #$28,R0
 	BNE @@2
 	CALL bas_expr
-	CALL next_token
+	CALL get_next
 	CMPI #$29,R0
 	BNE @@2
 	PULR R0
@@ -1658,7 +1844,7 @@ bas_expr4:	PROC
 	CMPI #$28,R0	; Parenthesis?
 	BNE @@5
 	CALL bas_expr
-	CALL next_token
+	CALL get_next
 	CMPI #$29,R0
 	BNE @@2
 	PULR PC
@@ -1675,11 +1861,32 @@ bas_expr4:	PROC
 	MVI@ R5,R3
 	PULR PC
 
-@@1:	CMPI #$30,R0	; 0-9?
+@@1:	CMPI #$2E,R0
+	BEQ @@11
+	CMPI #$30,R0	; 0-9?
 	BNC @@2
 	CMPI #$3A,R0
 	BC @@2
+@@11:
+	CALL parse_number
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR PC
+
+@@2:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+	PULR PC
+	ENDP
+
+parse_number:	PROC
+	PSHR R5
 	CLRR R2
+	CMPI #$2D,R0
+	BNE @@1
+	MVII #1,R3
+	B @@2
+
+@@1:	CLRR R3
 @@4:
 	SUBI #$30,R0
 	MOVR R2,R1
@@ -1688,7 +1895,7 @@ bas_expr4:	PROC
 	ADDR R1,R2
 	ADDR R2,R2
 	ADDR R0,R2
-	MVI@ R4,R0
+@@2:	MVI@ R4,R0
 	CMPI #$30,R0
 	BNC @@3
 	CMPI #$3A,R0
@@ -1697,15 +1904,15 @@ bas_expr4:	PROC
 @@3:
 	DECR R4
 	PSHR R4
+	PSHR R3
 	MOVR R2,R0
 	CALL fpfromuint
-	MOVR R0,R2
-	MOVR R1,R3
+	PULR R3
+	TSTR R3
+	BEQ @@5
+	CALL fpneg
+@@5:
 	PULR R4
-	PULR PC
-
-@@2:	MVII #ERR_SYNTAX,R0
-	CALL bas_error
 	PULR PC
 	ENDP
 
@@ -2223,6 +2430,7 @@ bas_card:	RMB 1	; Card under the cursor.
 bas_curline:	RMB 1	; Current line in execution (0 for direct command)
 bas_forptr:	RMB 1	; Stack for FOR loops.
 bas_gosubptr:	RMB 1	; Stack for GOSUB/RETURN.
+bas_dataptr:	RMB 1	; Pointer for DATA.
 program_end:	RMB 1	; Pointer to program's end.
 lfsr:		RMB 1	; Random number
 
