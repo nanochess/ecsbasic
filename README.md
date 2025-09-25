@@ -25,6 +25,7 @@ The following statements are supported:
     LIST
     RUN
     NEW
+    REM comment
     v = expr
     IF expr THEN line
     IF expr THEN statement
@@ -39,6 +40,12 @@ The following statements are supported:
     FOR v=x TO y STEP z
     NEXT
     NEXT v
+    RESTORE
+    RESTORE line
+    READ a
+    READ a,b
+    DATA v
+    DATA v,v
 
 Statements can be concatenated on a single line using the colon as a separator.
 
