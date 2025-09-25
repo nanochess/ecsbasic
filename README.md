@@ -33,6 +33,14 @@ The following statements are supported:
     PRINT expr
     PRINT "string"
     PRINT "string";expr
+    GOSUB line
+    RETURN
+    FOR v=x TO y
+    FOR v=x TO y STEP z
+    NEXT
+    NEXT v
+
+Statements can be concatenated on a single line using the colon as a separator.
 
 The following expression operators are supported:
 
@@ -46,6 +54,7 @@ The following expression operators are supported:
     -
     *
     /
+    - (negation)
     (expr)
     num
     v

@@ -10,7 +10,8 @@
 	;            	              LIST, NEW, CLS, RUN, STOP, PRINT, and GOTO. Execution can
 	;                             be interrupted using the Esc key.
 	; Revision date: Sep/23/2025. Added INPUT statement. Solved bug checking for Esc in GOTO.
-	; Revision date: Sep/24/2025. Added ELSE statement.
+	; Revision date: Sep/24/2025. Added ELSE statement. Added GOSUB/RETURN. Added FOR/NEXT.
+	;                             Added negation operator.
 	;
 
 	ROMW 16
@@ -45,6 +46,8 @@ ERR_STOP:	EQU 2
 ERR_LINE:	EQU 3
 ERR_GOSUB:	EQU 4
 ERR_RETURN:	EQU 5
+ERR_FOR:	EQU 6
+ERR_NEXT:	EQU 7
 
 KEY.LEFT    EQU     $1C     ; \   Can't be generated otherwise, so perfect
 KEY.RIGHT   EQU     $1D     ;  |_ candidates.  Could alternately send 8 for
@@ -267,6 +270,9 @@ main_loop:
 	TSTR R0		; Line number found?
 	BNE @@2		; Yes, jump.
 	MVII #basic_buffer,R4
+	MVII #$FFFF,R0	; So it is executed.
+	MVO@ R0,R4
+	DECR R4
 	CALL bas_execute_line
 	B @@3
 
@@ -305,10 +311,10 @@ keywords_exec:
 	DECLE bas_if
 	DECLE bas_syntax_error
 	DECLE bas_syntax_error
-	DECLE bas_syntax_error	; FOR
+	DECLE bas_for		; FOR
 	DECLE bas_syntax_error
 	DECLE bas_syntax_error
-	DECLE bas_syntax_error	; NEXT
+	DECLE bas_next		; NEXT
 	DECLE bas_gosub
 	DECLE bas_return
 
@@ -347,7 +353,9 @@ errors:
 	DECLE "STOP",0
 	DECLE "Undefined",0
 	DECLE "Too many GOSUB",0
-	DECLE "RETURN without GOSUB",0
+	DECLE "RETURN w/o GOSUB",0
+	DECLE "Too many FOR",0
+	DECLE "NEXT w/o FOR",0
 	
 	;
 	; Read a line from the input
@@ -522,6 +530,8 @@ bas_error:	PROC
 	MVI bas_curline,R0
 	TSTR R0
 	BEQ @@4
+	CMPI #$FFFF,R0
+	BEQ @@4	
 	MVII #at_line,R4
 @@5:
 	MVI@ R4,R0
@@ -681,6 +691,7 @@ bas_tokenize:	PROC
 	CLRR R2
 	MVO@ R2,R3
 	INCR R3
+	MVO@ R2,R3
 	SUBI #basic_buffer+2,R3
 	MVO R3,basic_buffer+1	; Take note of the length
 
@@ -693,24 +704,33 @@ bas_tokenize:	PROC
 	;
 bas_execute_line:	PROC
 	PSHR R5
+@@0:
 	MVI@ R4,R0
+	TSTR R0
+	BEQ @@3
 	MVO R0,bas_curline
 	INCR R4
 @@2:	MVI@ R4,R0
 	TSTR R0
-	BEQ @@1
+	BEQ @@0
 	DECR R4
 	CALL bas_execute
 	CALL get_next
 	TSTR R0
-	BEQ @@1
+	BEQ @@0
 	CMPI #TOKEN_ELSE,R0
 	BEQ @@1
 	CMPI #TOKEN_COLON,R0
 	BEQ @@2
 	MVII #ERR_SYNTAX,R0
 	CALL bas_error
-@@1:	PULR PC
+
+@@1:	MVI@ R4,R0
+	TSTR R0
+	BNE @@1
+	B @@0
+
+@@3:	PULR PC
 	ENDP
 
 	;
@@ -725,14 +745,7 @@ bas_execute:	PROC
 	CMPI #TOKEN_START,R0	; Token found?
 	BC @@2
 	; Try an assignment
-	CMPI #$41,R0
-	BNC @@1
-	CMPI #$5B,R0
-	BC @@1
-	SUBI #$41,R0
-	SLL R0,2
-	MVII #variables,R5
-	ADDR R0,R5
+	CALL get_var_addr
 	PSHR R5
 	CALL get_next
 	CMPI #TOKEN_EQ,R0
@@ -866,16 +879,8 @@ bas_run:	PROC
 	MVO R0,bas_gosubptr
 	MVII #program_start,R4
 @@1:
-	MVI@ R4,R0
-	DECR R4
-	TSTR R0
-	BEQ basic_restart
-	PSHR R4
 	CALL bas_execute_line
-	PULR R4
-	INCR R4
-	ADD@ R4,R4
-	B @@1
+	B basic_restart
 	ENDP
 
 	;
@@ -1111,6 +1116,186 @@ get_next_point:	PROC
 	CALL bas_error
 @@3:
 	PULR PC
+	ENDP
+
+	;
+	; Get variable address
+	;
+get_var_addr:	PROC
+	PSHR R5
+	CMPI #$41,R0
+	BNC @@1
+	CMPI #$5B,R0
+	BC @@1
+	SUBI #$41,R0
+	SLL R0,2
+	MVII #variables,R5
+	ADDR R0,R5
+	PULR PC
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+	ENDP
+
+	;
+	; FOR
+	;
+bas_for:	PROC
+	PSHR R5
+	MVI bas_forptr,R5
+	CMPI #end_for-5,R5
+	BC @@1
+	; Try an assignment
+	CALL get_next
+	CALL get_var_addr
+	MVI bas_forptr,R3
+	MVO@ R5,R3		; Take note of the variable.
+	PSHR R5
+	CALL get_next
+	CMPI #TOKEN_EQ,R0
+	BNE @@2
+	CALL bas_expr
+	PULR R5
+	MVO@ R2,R5		; Assign initial value.
+	MVO@ R3,R5
+	CALL get_next
+	CMPI #TOKEN_TO,R0
+	BNE @@2
+	MVI bas_forptr,R3
+	INCR R3
+	INCR R3
+	MVO@ R4,R3		; Take note of TO expression
+	CALL bas_expr		; Evaluate once
+	CALL get_next
+	MVI bas_forptr,R3
+	INCR R3
+	CMPI #TOKEN_STEP,R0
+	BNE @@3
+	MVO@ R4,R3		; Take note of STEP expression
+	CALL bas_expr		; Evaluate once
+	B @@4
+
+@@3:	CLRR R2
+	MVO@ R2,R3		; No STEP expression
+	DECR R4
+@@4:	PSHR R4
+	CALL get_next_point
+	MVI bas_forptr,R3
+	INCR R3
+	INCR R3
+	INCR R3
+	MVO@ R4,R3		; Parsing position
+	INCR R3
+	MVO@ R1,R3		; Line 
+	INCR R3
+	MVO R3,bas_forptr
+	PULR R4
+	PULR PC
+@@1:
+	MVII #ERR_FOR,R0
+	CALL bas_error
+@@2:
+	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+	PULR PC
+	ENDP
+
+	;
+	; NEXT
+	;
+bas_next:	PROC
+	PSHR R5
+	MVI bas_forptr,R5
+	CMPI #start_for,r5
+	BNE @@1
+@@0:
+	MVII #ERR_NEXT,R0
+	CALL bas_error
+@@1:	CALL get_next
+	CMPI #$41,R0		; Variable name?
+	BNC @@2
+	CMPI #$5B,R0
+	BC @@2			; No, jump.
+	CALL get_var_addr
+	MVI bas_forptr,R3
+@@3:	CMPI #start_for,R3
+	BEQ @@0
+	SUBI #5,R3
+	CMP@ R3,R5		; Find in FOR stack
+	BNE @@3
+	B @@4
+
+@@2:	DECR R4
+	MVI bas_forptr,R3	; Use most recent FOR.
+	DECR R3
+	DECR R3
+	DECR R3
+	DECR R3
+	DECR R3
+@@4:	PSHR R4
+	MOVR R3,R5
+	MVI@ R5,R3		; Variable address.
+	PSHR R3
+	MVI@ R3,R0		; Read value
+	INCR R3
+	MVI@ R3,R1
+	MVI@ R5,R4		; Read STEP value.
+	PSHR R5
+	TSTR R4
+	BEQ @@5
+	PSHR R0
+	PSHR R1
+	CALL bas_expr
+	PULR R1
+	PULR R0
+	B @@6
+@@5:
+	CLRR R2
+	MVII #$003F,R3		; 1.0
+@@6:
+	MOVR R3,R4
+	ANDI #$80,R4
+	MVO R4,temp1
+	CALL fpadd
+	PULR R5
+	PULR R3
+	MVO@ R0,R3		; Save new value.
+	INCR R3
+	MVO@ R1,R3
+	MVI@ R5,R4		; Read TO value.
+	PSHR R5
+	PSHR R0
+	PSHR R1
+	CALL bas_expr
+	PULR R1
+	PULR R0
+	MVI temp1,R4
+	TSTR R4
+	BEQ @@7
+	CALL fpcomp
+	BC @@8
+	B @@9	
+@@7:
+	CALL fpcomp
+	BEQ @@8
+	BC @@9
+
+@@8:	PULR R5
+	PULR R4		; Previous parsing position.
+	MVI@ R5,R4
+	MVI@ R5,R1
+	MVO R1,bas_curline
+	PULR R5
+	B bas_execute
+
+@@9:	PULR R5
+	PULR R4
+	DECR R5
+	DECR R5
+	DECR R5
+	MVO R5,bas_forptr
+	PULR PC
+
 	ENDP
 
 	;
@@ -1378,6 +1563,20 @@ bas_expr2:	PROC
 	ENDP
 
 bas_expr3:	PROC
+	PSHR R5
+	CALL next_token
+	CMPI #$2D,R0	; Minus?
+	BNE @@1
+	CALL bas_expr4
+	XORI #$80,R3
+	PULR PC
+
+@@1:	DECR R4
+	CALL bas_expr4
+	PULR PC
+	ENDP
+
+bas_expr4:	PROC
 	PSHR R5
 	CALL next_token
 	CMPI #$28,R0	; Parenthesis?
@@ -1953,3 +2152,4 @@ _ntsc:      RMB 1       ; bit 0 = 1=NTSC, 0=PAL. Bit 1 = 1=ECS detected.
 _border_color:  RMB 1   ; Border color
 _border_mask:   RMB 1   ; Border mask
 ECS_KEY_LAST:	RMB 1	; ECS last key pressed.
+temp1:		RMB 1	; Temporary value.
