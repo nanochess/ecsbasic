@@ -51,6 +51,7 @@ The following statements are supported:
     READ a,b
     DATA v
     DATA v,v
+    COLOR v
 
 Statements can be concatenated on a single line using the colon as a separator.
 

@@ -1776,7 +1776,17 @@ bas_mode:
 	;
 	; COLOR
 	;
-bas_color:
+bas_color:	PROC
+	PSHR R5
+	CALL bas_expr
+	PSHR R4
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PULR R4
+	MVO R0,bas_curcolor
+	PULR PC
+	ENDP
 
 	;
 	; DEFINE
