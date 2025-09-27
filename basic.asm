@@ -15,7 +15,7 @@
 	;                             RND. Added REM, RESTORE, READ, and DATA.
 	; Revision date: Sep/26/2025. Added arrays with DIM.
 	; Revision date: Sep/27/2025. Added AND, XOR, OR, and NOT. Implemented COLOR, WAIT,
-	;                             SPRITE, and SOUND.
+	;                             SPRITE, SOUND, STICK, STRIG, KEY, and BK.
 	;
 
 	ROMW 16
@@ -41,26 +41,27 @@ TOKEN_STEP:	EQU $010e
 
 TOKEN_DATA:	EQU $0115
 
-TOKEN_LE:	EQU $011D
-TOKEN_GE:	EQU $011E
-TOKEN_NE:	EQU $011F
-TOKEN_EQ:	EQU $0120
-TOKEN_LT:	EQU $0121
-TOKEN_GT:	EQU $0122
+TOKEN_AND:	EQU $011d
+TOKEN_NOT:	EQU $011e
+TOKEN_OR:	EQU $011f
+TOKEN_XOR:	EQU $0120
 
-TOKEN_FUNC:	EQU $0123
-TOKEN_INT:	EQU $0123
-TOKEN_ABS:	EQU $0124
-TOKEN_SGN:	EQU $0125
-TOKEN_RND:	EQU $0126
-TOKEN_AND:	EQU $0127
-TOKEN_NOT:	EQU $0128
-TOKEN_OR:	EQU $0129
-TOKEN_XOR:	EQU $012A
-TOKEN_STICK:	EQU $012B
-TOKEN_STRIG:	EQU $012C
-TOKEN_KEY:	EQU $012D
-TOKEN_BK:	EQU $012E
+TOKEN_LE:	EQU $0121
+TOKEN_GE:	EQU $0122
+TOKEN_NE:	EQU $0123
+TOKEN_EQ:	EQU $0124
+TOKEN_LT:	EQU $0125
+TOKEN_GT:	EQU $0126
+
+TOKEN_FUNC:	EQU $0127
+TOKEN_INT:	EQU $0127
+TOKEN_ABS:	EQU $0128
+TOKEN_SGN:	EQU $0129
+TOKEN_RND:	EQU $012a
+TOKEN_STICK:	EQU $012b
+TOKEN_STRIG:	EQU $012c
+TOKEN_KEY:	EQU $012d
+TOKEN_BK:	EQU $012e
 
 ERR_TITLE:	EQU 0
 ERR_SYNTAX:	EQU 1
@@ -364,6 +365,10 @@ keywords_exec:
 	DECLE bas_sound	
 
 	; Operators and BASIC functions cannot be executed directly
+	DECLE bas_syntax_error	; AND
+	DECLE bas_syntax_error	; NOT
+	DECLE bas_syntax_error	; OR
+	DECLE bas_syntax_error	; XOR
 	DECLE bas_syntax_error	; <=
 	DECLE bas_syntax_error	; >=
 	DECLE bas_syntax_error	; <>
@@ -374,14 +379,10 @@ keywords_exec:
 	DECLE bas_syntax_error	; ABS
 	DECLE bas_syntax_error	; SGN
 	DECLE bas_syntax_error	; RND
-	DECLE bas_syntax_error	; AND
-	DECLE bas_syntax_error	; NOT
-	DECLE bas_syntax_error	; OR
-	DECLE bas_syntax_error	; XOR
 	DECLE bas_syntax_error	; STICK
 	DECLE bas_syntax_error	; TRIG
 	DECLE bas_syntax_error	; KEY
-	DECLE bas_syntax_error	; BK
+	DECLE bas_bk	; BK
 
 keywords:
 	DECLE ":",0	; $0100
@@ -413,7 +414,11 @@ keywords:
 	DECLE "SPRITE",0
 	DECLE "WAIT",0
 	DECLE "SOUND",0	; $011C
-	DECLE "<=",0	; $011D
+	DECLE "AND",0	; $011d
+	DECLE "NOT",0
+	DECLE "OR",0
+	DECLE "XOR",0
+	DECLE "<=",0	; $0121
 	DECLE ">=",0
 	DECLE "<>",0
 	DECLE "=",0
@@ -423,10 +428,6 @@ keywords:
 	DECLE "ABS",0
 	DECLE "SGN",0
 	DECLE "RND",0
-	DECLE "AND",0
-	DECLE "NOT",0
-	DECLE "OR",0
-	DECLE "XOR",0
 	DECLE "STICK",0
 	DECLE "STRIG",0
 	DECLE "KEY",0
@@ -1983,6 +1984,34 @@ bas_sound:	PROC
 	ENDP
 
 	;
+	; BK(v) = v
+	;
+bas_bk:	PROC
+	PSHR R5
+	CALL bas_expr_paren
+	PSHR R4
+	CALL fp2int
+	PULR R4
+	CMPI #$240,R0
+	BC @@1
+	PSHR R0
+	CALL get_next
+	CMPI #TOKEN_EQ,R0
+	BNE @@2
+	CALL bas_expr_int
+	PULR R5
+	ADDI #$0200,R5
+	MVO@ R0,R5
+	PULR PC
+
+@@1:	MVII #ERR_BOUNDS,R0
+	CALL bas_error
+
+@@2:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+	ENDP
+
+	;
 	; Syntax error (reserved keyword at wrong place) 
 	;
 bas_syntax_error:	PROC
@@ -2324,57 +2353,69 @@ bas_expr6:	PROC
 	PULR PC
 	ENDP
 
+bas_expr_paren:	PROC
+	PSHR R5
+	CALL get_next
+	CMPI #$28,R0
+	BNE @@1
+	CALL bas_expr
+	CALL get_next
+	CMPI #$29,R0
+	BNE @@1
+	MOVR R2,R0
+	MOVR R3,R1
+	PULR PC
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+	ENDP
+
 bas_expr7:	PROC
 	PSHR R5
 	CALL get_next
 	
 	CMPI #TOKEN_FUNC,R0
 	BNC @@6
-	CMPI #TOKEN_RND,R0
-	BNE @@7
+	MOVR R0,R1
+	ADDI #@@0-TOKEN_FUNC,R1
+	CMPI #@@0+8,R1
+	BC @@6
+	MVI@ R1,R7
+@@0:
+	DECLE @@INT
+	DECLE @@ABS
+	DECLE @@SGN
+	DECLE @@RND
+	DECLE @@STICK
+	DECLE @@STRIG
+	DECLE @@KEY
+	DECLE @@BK
+
+@@RND:
 	PSHR R4
 	CALL fprnd
 	PULR R4
 	MOVR R0,R2
 	MOVR R1,R3
 	PULR PC
-@@7:
-	PSHR R0
-	CALL get_next
-	CMPI #$28,R0
-	BNE @@2
-	CALL bas_expr
-	CALL get_next
-	CMPI #$29,R0
-	BNE @@2
-	PULR R0
-	CMPI #TOKEN_INT,R0
-	BEQ @@8
-	CMPI #TOKEN_SGN,R0
-	BEQ @@9
-	CMPI #TOKEN_ABS,R0
-	BEQ @@10
-
-@@8:	MOVR R2,R0
-	MOVR R3,R1
+@@INT:
+	CALL bas_expr_paren
 	PSHR R4
 	CALL fpint
 	PULR R4
 	MOVR R0,R2
 	MOVR R1,R3
 	PULR PC
-
-@@9:	MOVR R2,R0
-	MOVR R3,R1
+@@SGN:
+	CALL bas_expr_paren
 	PSHR R4
 	CALL fpsgn
 	PULR R4
 	MOVR R0,R2
 	MOVR R1,R3
 	PULR PC
-
-@@10:	MOVR R2,R0
-	MOVR R3,R1
+@@ABS:
+	CALL bas_expr_paren
 	PSHR R4
 	CALL fpabs
 	PULR R4
@@ -2382,6 +2423,117 @@ bas_expr7:	PROC
 	MOVR R1,R3
 	PULR PC
 
+@@STICK:
+	CALL bas_expr_paren
+	PSHR R4
+	CALL fp2int
+	CMPI #2,R0
+	BC @@3
+	MOVR R0,R1
+	XORI #$01FF,R1
+	MVI@ R1,R0
+	XORI #$FF,R0
+	MOVR R0,R1
+	ANDI #$E0,R1
+	CMPI #$80,R1
+	BEQ @@7
+	CMPI #$40,R1
+	BEQ @@7
+	CMPI #$20,R1
+	BEQ @@7
+	ANDI #$1F,R0
+	INCR R7
+@@7:	CLRR R0
+	MVII #@@TABLE,R1
+	ADDR R0,R1
+	MVI@ R1,R0
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	PULR PC
+
+@@TABLE:
+	DECLE 0,9,5,8,1,0,4,0
+	DECLE 13,12,0,0,16,0,0,0
+	DECLE 0,10,6,7,2,0,3,0
+	DECLE 14,11,0,0,15,0,0,0
+
+@@STRIG:
+	CALL bas_expr_paren
+	PSHR R4
+	CALL fp2int
+	CMPI #2,R0
+	BC @@3
+	MOVR R0,R1
+	XORI #$01FF,R1
+	MVI@ R1,R1
+	XORI #$FF,R1
+	CLRR R0
+	ANDI #$e0,R1
+	BEQ @@4
+	INCR R0
+	CMPI #$a0,R1
+	BEQ @@4
+	INCR R0
+	CMPI #$60,R1
+	BEQ @@4
+	INCR R0
+	CMPI #$C0,R1
+	BEQ @@4
+	CLRR R0
+@@4:
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	PULR PC
+@@KEY:
+	CALL bas_expr_paren
+	PSHR R4
+	CALL fp2int
+	CMPI #2,R0
+	BC @@3
+	MOVR R0,R1
+	XORI #$01FF,R1
+	MVI@ R1,R1
+	XORI #$FF,R1
+	CLRR R0
+	MVII #@@KEYS,R4
+@@9:
+	CMP@ R4,R1
+	BEQ @@8
+	INCR R0
+	CMP@ R4,R1
+	BEQ @@8
+	INCR R0
+	CMPI #12,R0
+	BNE @@9
+@@8:
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	PULR PC
+
+@@KEYS:
+	DECLE $48,$81,$41,$21,$82,$42,$22,$84,$44,$24,$88,$28
+
+	; BK(v) Read screen
+@@BK:
+	CALL bas_expr_paren
+	PSHR R4
+	CALL fp2int
+	CMPI #240,R0
+	BC @@3
+	MOVR R0,R1
+	ADDI #$0200,R1
+	MVI@ R1,R0
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	PULR PC
 @@6:
 	CMPI #$28,R0	; Parenthesis?
 	BNE @@5
@@ -2414,7 +2566,9 @@ bas_expr7:	PROC
 
 @@2:	MVII #ERR_SYNTAX,R0
 	CALL bas_error
-	PULR PC
+
+@@3:	MVII #ERR_BOUNDS,R0
+	CALL bas_error
 	ENDP
 
 	;

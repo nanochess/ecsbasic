@@ -58,7 +58,8 @@ The following statements are supported:
     SOUND 2,[f][,v]
     SOUND 3,[f][,env]
     SOUND 4,[noise][,mix]
-    WAIT        
+    WAIT     
+    bk(pos)=card   
 
 Statements can be concatenated on a single line using the colon as a separator.
 
@@ -87,6 +88,10 @@ The following expression operators are supported:
     ABS(expr)
     SGN(expr)
     RND
+    STICK(cont)
+    STRIG(cont)
+    KEY(cont)
+    BK(pos)
 
 Currently, the number input only allows for 16-bit integers, that are translated to floating-point. However, the number output is able to show fractions, and exponents.
 
