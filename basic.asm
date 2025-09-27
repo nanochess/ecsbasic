@@ -22,6 +22,8 @@
 	ROMW 16
 	ORG $5000
 
+	CFGVAR "jlp" = 1	; Enable JLP RAM on real hardware.
+
 basic_buffer:	EQU $8040
 variables:	EQU $8080
 program_start:	EQU $80C0
@@ -445,7 +447,7 @@ keywords:
 at_line:
 	DECLE " at ",0
 errors:
-	DECLE "ECS extended BASIC",0
+	DECLE "ECS extended BASIC",$0d,$0a,"by nanochess 2025",0
 	DECLE "Syntax error",0
 	DECLE "STOP",0
 	DECLE "Undefined",0
@@ -695,10 +697,11 @@ bas_tokenize:	PROC
 	ADDR R2,R2		; x10
 	ADDR R0,R2
 	CMP bas_ttypos,R4
-	BEQ @@3
+	BEQ @@19
 	CALL bas_read_card
 	B @@2
 
+@@19:	CLRR R0
 @@3:	MVO@ R2,R3		; Take note of the line number
 	INCR R3
 	INCR R3			; Avoid the tokenized length.
@@ -726,7 +729,9 @@ bas_tokenize:	PROC
 	INCR R3
 	B @@6
 
-@@14:	DECR R4
+@@14:	CMPI #$10,R0		; ASCII character $20-$2f?
+	BNC @@20
+	DECR R4
 	MVII #keywords,R2
 	MVII #TOKEN_START,R5
 @@8:	PSHR R4
@@ -765,6 +770,7 @@ bas_tokenize:	PROC
 	BNE @@8
 	; No token found	
 @@7:	CALL bas_read_card
+@@20:
 	ADDI #$20,R0
 	CMPI #$61,R0
 	BNC @@18
