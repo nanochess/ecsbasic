@@ -15,7 +15,8 @@
 	;                             RND. Added REM, RESTORE, READ, and DATA.
 	; Revision date: Sep/26/2025. Added arrays with DIM.
 	; Revision date: Sep/27/2025. Added AND, XOR, OR, and NOT. Implemented COLOR, WAIT,
-	;                             SPRITE, SOUND, STICK, STRIG, KEY, BK, MODE, and BORDER.
+	;                             SPRITE, SOUND, STICK, STRIG, KEY, BK, MODE, BORDER, and
+	;                             DEFINE.
 	;
 
 	ROMW 16
@@ -978,6 +979,7 @@ bas_run:	PROC
 	MVO R3,bas_arrays	
 	CLRR R0			; No arrays.
 	MVO@ R0,R3
+	MVO R3,bas_last_array
 
 	MVII #program_start,R4
 @@1:
@@ -1770,6 +1772,7 @@ bas_dim:	PROC
 	ADDR R1,R3
 	CLRR R1
 	MVO@ R1,R3
+	MVO R3,bas_last_array
 	PULR R4
 	PULR PC
 
@@ -1820,7 +1823,88 @@ bas_color:	PROC
 	;
 	; DEFINE
 	;
-bas_define:
+bas_define:	PROC
+	PSHR R5
+	CALL bas_expr_int
+	PSHR R0
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@1
+	CALL get_next
+	CMPI #$22,R0
+	BNE @@1
+	MVI bas_last_array,R3
+	INCR R3
+@@0:	
+	CALL @@convert_hex
+	BC @@2
+	SLL R0,2
+	SLL R0,2
+	MOVR R0,R2
+
+	CALL @@convert_hex
+	BC @@2
+	ADDR R0,R2
+
+	SWAP R2
+	CALL @@convert_hex
+	BC @@2
+	SLL R0,2
+	SLL R0,2
+	ADDR R0,R2
+
+	CALL @@convert_hex
+	BC @@2
+	ADDR R0,R2
+	SWAP R2
+
+	MVO@ R2,R3
+	INCR R3
+	B @@0
+
+@@2:	CMPI #$22,R0
+	BNE @@1
+
+	MVI bas_last_array,R2
+	INCR R2
+	SUBR R2,R3
+	SLR R3,2
+	BEQ @@1
+	MVO R3,_gram_total
+	MVO R2,_gram_bitmap
+	PULR R0
+	MVO R0,_gram_target
+
+	PULR PC
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+
+@@convert_hex:
+	MVI@ R4,R0
+	CMPI #$61,R0
+	BNC @@c1
+	SUBI #$20,R0
+@@c1:	CMPI #$30,R0
+	BNC @@c2
+	CMPI #$47,R0
+	BC @@c2
+	CMPI #$3A,R0
+	BNC @@c3
+	CMPI #$41,R0
+	BNC @@c2
+@@c3:	SUBI #$30,R0
+	CMPI #10,R0
+	BNC @@c4
+	SUBI #7,R0
+@@c4:
+	CLRC
+	MOVR R5,PC
+
+@@c2:	SETC
+	MOVR R5,PC
+
+	ENDP
 
 	;
 	; SPRITE
@@ -3100,7 +3184,6 @@ _int_vector:     PROC
 	;
 	; Detect GRAM definition
 	;
-    if 0
 	MVI _gram_bitmap,R4
 	TSTR R4
 	BEQ @@vi1
@@ -3131,37 +3214,6 @@ _int_vector:     PROC
 	BNE @@vi3
 	MVO R0,_gram_bitmap
 @@vi1:
-	MVI _gram2_bitmap,R4
-	TSTR R4
-	BEQ @@vii1
-	MVI _gram2_target,R1
-	SLL R1,2
-	SLL R1,1
-	ADDI #$3800,R1
-	MOVR R1,R5
-	MVI _gram2_total,R0
-@@vii3:
-	MVI@    R4,     R1
-	MVO@    R1,     R5
-	SWAP    R1
-	MVO@    R1,     R5
-	MVI@    R4,     R1
-	MVO@    R1,     R5
-	SWAP    R1
-	MVO@    R1,     R5
-	MVI@    R4,     R1
-	MVO@    R1,     R5
-	SWAP    R1
-	MVO@    R1,     R5
-	MVI@    R4,     R1
-	MVO@    R1,     R5
-	SWAP    R1
-	MVO@    R1,     R5
-	DECR R0
-	BNE @@vii3
-	MVO R0,_gram2_bitmap
-@@vii1:
-    endi
 
 	; Increase frame number
 	MVI _frame,R0
@@ -3200,10 +3252,12 @@ bas_forptr:	RMB 1	; Stack for FOR loops.
 bas_gosubptr:	RMB 1	; Stack for GOSUB/RETURN.
 bas_dataptr:	RMB 1	; Pointer for DATA.
 bas_arrays:	RMB 1	; Pointer to where arrays start.
+bas_last_array:	RMB 1	; Pointer to end of array list.
 bas_memlimit:	RMB 1	; Mmemory limit.
 program_end:	RMB 1	; Pointer to program's end.
 lfsr:		RMB 1	; Random number
 _mode_color:	RMB 1	; Colors for Color Stack mode.
+_gram_bitmap:	RMB 1	; Pointer to bitmap for GRAM.
 
 SCRATCH:    ORG $100,$100,"-RWBN"
 	;
@@ -3215,5 +3269,7 @@ _ntsc:      RMB 1       ; bit 0 = 1=NTSC, 0=PAL. Bit 1 = 1=ECS detected.
 _mode:	RMB 1	; Video mode setup.
 _border_color:  RMB 1   ; Border color
 _border_mask:   RMB 1   ; Border mask
+_gram_target:	RMB 1	; Target GRAM card.
+_gram_total:	RMB 1	; Total of GRAM cards.
 ECS_KEY_LAST:	RMB 1	; ECS last key pressed.
 temp1:		RMB 1	; Temporary value.

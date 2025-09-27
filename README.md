@@ -63,6 +63,7 @@ The following statements are supported:
     MODE 0,colors
     MODE 1
     BORDER color
+    DEFINE card,"hex.drawing"
 
 Statements can be concatenated on a single line using the colon as a separator.
 
