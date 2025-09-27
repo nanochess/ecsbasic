@@ -15,7 +15,7 @@
 	;                             RND. Added REM, RESTORE, READ, and DATA.
 	; Revision date: Sep/26/2025. Added arrays with DIM.
 	; Revision date: Sep/27/2025. Added AND, XOR, OR, and NOT. Implemented COLOR, WAIT,
-	;                             SPRITE, SOUND, STICK, STRIG, KEY, and BK.
+	;                             SPRITE, SOUND, STICK, STRIG, KEY, BK, MODE, and BORDER.
 	;
 
 	ROMW 16
@@ -41,27 +41,27 @@ TOKEN_STEP:	EQU $010e
 
 TOKEN_DATA:	EQU $0115
 
-TOKEN_AND:	EQU $011d
-TOKEN_NOT:	EQU $011e
-TOKEN_OR:	EQU $011f
-TOKEN_XOR:	EQU $0120
+TOKEN_AND:	EQU $011e
+TOKEN_NOT:	EQU $011f
+TOKEN_OR:	EQU $0120
+TOKEN_XOR:	EQU $0121
 
-TOKEN_LE:	EQU $0121
-TOKEN_GE:	EQU $0122
-TOKEN_NE:	EQU $0123
-TOKEN_EQ:	EQU $0124
-TOKEN_LT:	EQU $0125
-TOKEN_GT:	EQU $0126
+TOKEN_LE:	EQU $0122
+TOKEN_GE:	EQU $0123
+TOKEN_NE:	EQU $0124
+TOKEN_EQ:	EQU $0125
+TOKEN_LT:	EQU $0126
+TOKEN_GT:	EQU $0127
 
-TOKEN_FUNC:	EQU $0127
-TOKEN_INT:	EQU $0127
-TOKEN_ABS:	EQU $0128
-TOKEN_SGN:	EQU $0129
-TOKEN_RND:	EQU $012a
-TOKEN_STICK:	EQU $012b
-TOKEN_STRIG:	EQU $012c
-TOKEN_KEY:	EQU $012d
-TOKEN_BK:	EQU $012e
+TOKEN_FUNC:	EQU $0128
+TOKEN_INT:	EQU $0128
+TOKEN_ABS:	EQU $0129
+TOKEN_SGN:	EQU $012a
+TOKEN_RND:	EQU $012b
+TOKEN_STICK:	EQU $012c
+TOKEN_STRIG:	EQU $012d
+TOKEN_KEY:	EQU $012e
+TOKEN_BK:	EQU $012f
 
 ERR_TITLE:	EQU 0
 ERR_SYNTAX:	EQU 1
@@ -229,6 +229,11 @@ _pal3:	SUBI #8,R6		; Drop interrupt stack.
 _ecs1:
 	MVO R2,_ntsc	
 
+	CLRR R0
+	MVO R0,_mode
+	MVII #$1111,R0
+	MVO R0,_mode_color
+
 	CALL _set_isr
 	DECLE _int_vector
 
@@ -363,6 +368,7 @@ keywords_exec:
 	DECLE bas_sprite
 	DECLE bas_wait
 	DECLE bas_sound	
+	DECLE bas_border
 
 	; Operators and BASIC functions cannot be executed directly
 	DECLE bas_syntax_error	; AND
@@ -414,11 +420,12 @@ keywords:
 	DECLE "SPRITE",0
 	DECLE "WAIT",0
 	DECLE "SOUND",0	; $011C
-	DECLE "AND",0	; $011d
+	DECLE "BORDER",0
+	DECLE "AND",0	; $011e
 	DECLE "NOT",0
 	DECLE "OR",0
 	DECLE "XOR",0
-	DECLE "<=",0	; $0121
+	DECLE "<=",0	; $0122
 	DECLE ">=",0
 	DECLE "<>",0
 	DECLE "=",0
@@ -1780,7 +1787,25 @@ bas_dim:	PROC
 	;
 	; MODE
 	;
-bas_mode:
+bas_mode:	PROC
+	PSHR R5
+	CALL bas_expr_int
+	CMPI #2,R0
+	BC @@1
+	MVO R0,_mode
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@2
+	CALL bas_expr_int
+	MVO R0,_mode_color
+	PULR PC
+
+@@2:	DECR R4
+	PULR PC
+
+@@1:	MVII #ERR_BOUNDS,R0
+	CALL bas_error
+	ENDP
 
 	;
 	; COLOR
@@ -1981,6 +2006,21 @@ bas_sound:	PROC
 
 @@11:	DECR R4
 	PULR PC
+	ENDP
+
+	;
+	; BORDER
+	;
+bas_border:	PROC
+	PSHR R5
+	CALL bas_expr_int
+	CMPI #16,R0
+	BC @@1
+	MVO R0,_border_color
+	PULR PC
+
+@@1:	MVII #ERR_BOUNDS,R0
+	CALL bas_error
 	ENDP
 
 	;
@@ -2983,20 +3023,29 @@ _int_vector:     PROC
 
 	MVII #1,R1
 	MVO R1,_int	; Indicates interrupt happened.
-
+	
 	MVO R0,$20	; Enables display
-;	MVO R0,$21	; Foreground/background mode
-	MVI $21,R0	; Color stack mode
-	MVII #$1111,R0
+	MVI _mode,R0
+	TSTR R0
+	BEQ @@1
+	MVO R0,$21	; Foreground/background mode
+	B @@2
+
+@@1:	MVI $21,R0	; Color stack mode
+	MVI _mode_color,R0
 	MVO R0,$28
-	SWAP R0
+	SLR R0,2
+	SLR R0,2
 	MVO R0,$29
 	SLR R0,2
 	SLR R0,2
 	MVO R0,$2A
-	SWAP R0
+	SLR R0,2
+	SLR R0,2
 	MVO R0,$2B
+@@2:
 
+@@0:
 	BEGIN
 
 	MVI _border_color,R0
@@ -3154,6 +3203,7 @@ bas_arrays:	RMB 1	; Pointer to where arrays start.
 bas_memlimit:	RMB 1	; Mmemory limit.
 program_end:	RMB 1	; Pointer to program's end.
 lfsr:		RMB 1	; Random number
+_mode_color:	RMB 1	; Colors for Color Stack mode.
 
 SCRATCH:    ORG $100,$100,"-RWBN"
 	;
@@ -3162,6 +3212,7 @@ SCRATCH:    ORG $100,$100,"-RWBN"
 ISRVEC:     RMB 2       ; Pointer to ISR vector (required by Intellivision ROM)
 _int:       RMB 1       ; Signals interrupt received
 _ntsc:      RMB 1       ; bit 0 = 1=NTSC, 0=PAL. Bit 1 = 1=ECS detected.
+_mode:	RMB 1	; Video mode setup.
 _border_color:  RMB 1   ; Border color
 _border_mask:   RMB 1   ; Border mask
 ECS_KEY_LAST:	RMB 1	; ECS last key pressed.

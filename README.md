@@ -60,6 +60,9 @@ The following statements are supported:
     SOUND 4,[noise][,mix]
     WAIT     
     bk(pos)=card   
+    MODE 0,colors
+    MODE 1
+    BORDER color
 
 Statements can be concatenated on a single line using the colon as a separator.
 
