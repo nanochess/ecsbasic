@@ -1094,7 +1094,7 @@ bas_input:	PROC
 	CALL bas_expr
 	PULR R0
 	SUBI #$41,R0
-	SLL R0,2
+	SLL R0,1
 	MVII #variables,R5
 	ADDR R0,R5
 	MVO@ R2,R5
@@ -1279,7 +1279,7 @@ get_var_addr:	PROC
 
 @@2:	DECR R4
 	SUBI #$41,R2
-	SLL R2,2
+	SLL R2,1
 	MVII #variables,R5
 	ADDR R2,R5
 	PULR PC
