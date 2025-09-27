@@ -1244,9 +1244,7 @@ get_var_addr:	PROC
 	CALL bas_expr
 	MOVR R2,R0
 	MOVR R3,R1
-	PSHR R4
 	CALL fp2uint
-	PULR R4
 	PULR R2
 	PSHR R0
 	CALL get_next
@@ -1955,11 +1953,13 @@ bas_sprite:	PROC
 @@5:
 	CALL bas_expr_int
 	PULR R3
+	PSHR R3
 	ADDI #16,R3
 	MVO@ R0,R3
 	INCR R7
 
 @@3:	DECR R4
+	PULR R3
 	PULR PC
 
 @@1:	MVII #ERR_BOUNDS,R0
@@ -2113,9 +2113,7 @@ bas_border:	PROC
 bas_bk:	PROC
 	PSHR R5
 	CALL bas_expr_paren
-	PSHR R4
 	CALL fp2int
-	PULR R4
 	CMPI #$240,R0
 	BC @@1
 	PSHR R0
@@ -2149,11 +2147,9 @@ bas_syntax_error:	PROC
 bas_expr_int:	PROC
 	PSHR R5
 	CALL bas_expr
-	PSHR R4
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
-	PULR R4
 	PULR PC
 	ENDP
 
@@ -2169,11 +2165,9 @@ bas_expr:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr1
-	PSHR R4
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
-	PULR R4
 	PULR R3
 	PULR R2
 	PSHR R4
@@ -2206,11 +2200,9 @@ bas_expr1:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr2
-	PSHR R4
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
-	PULR R4
 	PULR R3
 	PULR R2
 	PSHR R4
@@ -2240,11 +2232,9 @@ bas_expr2:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr3
-	PSHR R4
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
-	PULR R4
 	PULR R3
 	PULR R2
 	PSHR R4
