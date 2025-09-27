@@ -18,7 +18,11 @@ The same program for the Mattel ECS BASIC takes 210 seconds:
 
 The resulting value is meaningless because the calculations exceed completely the floating-point precision.
 
-There's no roadmap currently, and so far I've only implemented a core BASIC language. There are 26 variables (A-Z). The floating-point support is 25-bit mantissa, 7-bit exponent, and sign.
+There's no roadmap currently, and so far I've only implemented a core BASIC language.
+
+There are 26 variables (A-Z), and 26 arrays (A-Z) that require DIM first to declare them.
+
+The floating-point support is 25-bit mantissa, 7-bit exponent, and sign.
 
 The following statements are supported:
 
@@ -26,6 +30,7 @@ The following statements are supported:
     RUN
     NEW
     REM comment
+    DIM a(length)
     v = expr
     IF expr THEN line
     IF expr THEN statement
@@ -65,6 +70,7 @@ The following expression operators are supported:
     (expr)
     num
     v
+    a(index)
     INT(expr)
     ABS(expr)
     SGN(expr)

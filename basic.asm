@@ -13,6 +13,7 @@
 	; Revision date: Sep/24/2025. Added ELSE statement. Added GOSUB/RETURN. Added FOR/NEXT.
 	;                             Added negation operator. Added functions INT, ABS, SGN, and
 	;                             RND. Added REM, RESTORE, READ, and DATA.
+	; Revision date: Sep/26/2025. Added arrays with DIM.
 	;
 
 	ROMW 16
@@ -37,18 +38,18 @@ TOKEN_STEP:	EQU $010e
 
 TOKEN_DATA:	EQU $0115
 
-TOKEN_LE:	EQU $0116
-TOKEN_GE:	EQU $0117
-TOKEN_NE:	EQU $0118
-TOKEN_EQ:	EQU $0119
-TOKEN_LT:	EQU $011A
-TOKEN_GT:	EQU $011B
+TOKEN_LE:	EQU $0117
+TOKEN_GE:	EQU $0118
+TOKEN_NE:	EQU $0119
+TOKEN_EQ:	EQU $011A
+TOKEN_LT:	EQU $011B
+TOKEN_GT:	EQU $011C
 
-TOKEN_FUNC:	EQU $011C
-TOKEN_INT:	EQU $011C
-TOKEN_ABS:	EQU $011D
-TOKEN_SGN:	EQU $011E
-TOKEN_RND:	EQU $011F
+TOKEN_FUNC:	EQU $011D
+TOKEN_INT:	EQU $011D
+TOKEN_ABS:	EQU $011E
+TOKEN_SGN:	EQU $011F
+TOKEN_RND:	EQU $0120
 
 ERR_TITLE:	EQU 0
 ERR_SYNTAX:	EQU 1
@@ -59,6 +60,10 @@ ERR_RETURN:	EQU 5
 ERR_FOR:	EQU 6
 ERR_NEXT:	EQU 7
 ERR_DATA:	EQU 8
+ERR_DIM:	EQU 9
+ERR_MEMORY:	EQU 10
+ERR_ARRAY:	EQU 11
+ERR_BOUNDS:	EQU 12
 
 KEY.LEFT    EQU     $1C     ; \   Can't be generated otherwise, so perfect
 KEY.RIGHT   EQU     $1D     ;  |_ candidates.  Could alternately send 8 for
@@ -332,6 +337,19 @@ keywords_exec:
 	DECLE bas_restore
 	DECLE bas_read
 	DECLE bas_data
+	DECLE bas_dim
+
+	; Operators and BASIC functions cannot be executed directly
+	DECLE bas_syntax_error	; <=
+	DECLE bas_syntax_error	; >=
+	DECLE bas_syntax_error	; <>
+	DECLE bas_syntax_error	; =
+	DECLE bas_syntax_error	; <
+	DECLE bas_syntax_error	; >
+	DECLE bas_syntax_error	; INT
+	DECLE bas_syntax_error	; ABS
+	DECLE bas_syntax_error	; SGN
+	DECLE bas_syntax_error	; RND
 
 keywords:
 	DECLE ":",0	; $0100
@@ -356,7 +374,8 @@ keywords:
 	DECLE "RESTORE",0
 	DECLE "READ",0	; $0114
 	DECLE "DATA",0
-	DECLE "<=",0	; $0116
+	DECLE "DIM",0	
+	DECLE "<=",0	; $0117
 	DECLE ">=",0
 	DECLE "<>",0
 	DECLE "=",0
@@ -380,6 +399,10 @@ errors:
 	DECLE "Too many FOR",0
 	DECLE "NEXT w/o FOR",0
 	DECLE "No DATA found",0
+	DECLE "Redefined DIM",0
+	DECLE "Out of memory",0
+	DECLE "Undefined array",0
+	DECLE "Out of bounds",0
 	
 	;
 	; Read a line from the input
@@ -890,8 +913,18 @@ bas_run:	PROC
 	MVO R0,bas_forptr
 	MVII #start_gosub,R0
 	MVO R0,bas_gosubptr
+
+	MVO R0,bas_memlimit
+
 	CALL data_locate
 	MVO R0,bas_dataptr
+	
+	MVI program_end,R3
+	INCR R3			; Jump over the final word.
+	MVO R3,bas_arrays	
+	CLRR R0			; No arrays.
+	MVO@ R0,R3
+
 	MVII #program_start,R4
 @@1:
 	CALL bas_execute_line
@@ -1141,19 +1174,69 @@ get_next_point:	PROC
 	; Get variable address
 	;
 get_var_addr:	PROC
-	PSHR R5
 	CMPI #$41,R0
 	BNC @@1
 	CMPI #$5B,R0
 	BC @@1
-	SUBI #$41,R0
-	SLL R0,2
+@@0:
+	PSHR R5
+	MOVR R0,R2
+	CALL get_next
+	CMPI #$28,R0		; Array?
+	BNE @@2			; No, jump.
+	PSHR R2
+	CALL bas_expr
+	MOVR R2,R0
+	MOVR R3,R1
+	PSHR R4
+	CALL fp2uint
+	PULR R4
+	PULR R2
+	PSHR R0
+	CALL get_next
+	CMPI #$29,R0
+	BNE @@1
+	PSHR R4
+	MVI bas_arrays,R3
+@@3:	MVI@ R3,R4
+	TSTR R4
+	BEQ @@5
+	CMP@ R3,R2
+	BEQ @@4
+	INCR R3
+	MVI@ R3,R0
+	INCR R3
+	SLL R0,1	; Length x2.
+	ADDR R0,R3
+	B @@3
+
+@@4:	INCR R3		; Jump over name.
+	PULR R4		; Restore parsing position.
+	PULR R0		; Restore desired index.
+	CMP@ R3,R0
+	BC @@6
+	INCR R3
+	SLL R0,1
+	ADDR R0,R3
+	MOVR R3,R5
+	PULR PC
+
+@@2:	DECR R4
+	SUBI #$41,R2
+	SLL R2,2
 	MVII #variables,R5
-	ADDR R0,R5
+	ADDR R2,R5
 	PULR PC
 
 @@1:	MVII #ERR_SYNTAX,R0
 	CALL bas_error
+
+@@5:	MVII #ERR_ARRAY,R0
+	CALL bas_error
+
+@@6:	MVII #ERR_BOUNDS,R0
+	CALL bas_error
+
 	ENDP
 
 	;
@@ -1235,7 +1318,7 @@ bas_next:	PROC
 	BNC @@2
 	CMPI #$5B,R0
 	BC @@2			; No, jump.
-	CALL get_var_addr
+	CALL get_var_addr.0
 	MVI bas_forptr,R3
 @@3:	CMPI #start_for,R3
 	BEQ @@0
@@ -1492,7 +1575,7 @@ bas_read:	PROC
 	BNC @@2
 	CMPI #$5B,R0
 	BC @@2			; No, jump.
-	CALL get_var_addr
+	CALL get_var_addr.0
 	PSHR R4
 	PSHR R5
 	MVI bas_dataptr,R4
@@ -1562,6 +1645,8 @@ bas_read:	PROC
 	;
 	; DATA
 	;
+	; On execution it is ignored.
+	;
 bas_data:	PROC
 @@1:	MVI@ R4,R0
 	CMPI #TOKEN_COLON,R0
@@ -1571,6 +1656,78 @@ bas_data:	PROC
 @@2:
 	DECR R4
 	MOVR R5,PC
+	ENDP
+
+	;
+	; DIM
+	;
+bas_dim:	PROC
+	PSHR R5
+	CALL get_next
+	CMPI #$41,R0	; Variable name?
+	BNC @@1
+	CMPI #$5B,R0
+	BC @@1		; No, jump.
+	PSHR R0
+	CALL get_next
+	CMPI #$28,R0
+	BNE @@1
+	CALL get_next
+	CMPI #$30,R0
+	BNC @@1
+	CMPI #$3A,R0
+	BC @@1
+	CALL parse_integer
+	INCR R0		; Count zero.
+	PSHR R0
+	CALL get_next
+	CMPI #$29,R0
+	BNE @@1
+	PULR R1		; Length.
+	PULR R2		; Name.
+	;
+	; Search for previous definition.
+	;
+	PSHR R4
+	MVI bas_arrays,R3
+@@5:	MVI@ R3,R4
+	TSTR R4
+	BEQ @@4
+	CMP@ R3,R2
+	BEQ @@2
+	INCR R3
+	MVI@ R3,R0
+	INCR R3
+	SLL R0,1	; Length x2.
+	ADDR R0,R3
+	B @@5
+
+@@4:	MOVR R3,R0
+	ADDI #3,R0
+	ADDR R1,R0
+	ADDR R1,R0
+	CMP bas_memlimit,R0
+	BC @@3
+	MVO@ R2,R3
+	INCR R3
+	MVO@ R1,R3
+	INCR R3
+	SLL R1,1	; Length x2.
+	ADDR R1,R3
+	CLRR R1
+	MVO@ R1,R3
+	PULR R4
+	PULR PC
+
+@@3:	MVII #ERR_MEMORY,R0
+	CALL bas_error
+
+@@2: 	MVII #ERR_DIM,R0
+	CALL bas_error
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+
 	ENDP
 
 	;
@@ -1853,10 +2010,7 @@ bas_expr4:	PROC
 	BNC @@1
 	CMPI #$5B,R0
 	BC @@1
-	SUBI #$41,R0
-	SLL R0,2
-	MVII #variables,R5
-	ADDR R0,R5
+	CALL get_var_addr.0
 	MVI@ R5,R2
 	MVI@ R5,R3
 	PULR PC
@@ -1875,6 +2029,32 @@ bas_expr4:	PROC
 
 @@2:	MVII #ERR_SYNTAX,R0
 	CALL bas_error
+	PULR PC
+	ENDP
+
+	;
+	; Parse an integer.
+	;
+parse_integer:	PROC
+	PSHR R5
+	CLRR R2
+@@1:
+	SUBI #$30,R0
+	MOVR R2,R1
+	ADDR R2,R2
+	ADDR R2,R2
+	ADDR R1,R2
+	ADDR R2,R2
+	ADDR R0,R2
+@@2:	MVI@ R4,R0
+	CMPI #$30,R0
+	BNC @@3
+	CMPI #$3A,R0
+	BC @@3
+	B @@1
+@@3:
+	DECR R4
+	MOVR R2,R0
 	PULR PC
 	ENDP
 
@@ -2431,6 +2611,8 @@ bas_curline:	RMB 1	; Current line in execution (0 for direct command)
 bas_forptr:	RMB 1	; Stack for FOR loops.
 bas_gosubptr:	RMB 1	; Stack for GOSUB/RETURN.
 bas_dataptr:	RMB 1	; Pointer for DATA.
+bas_arrays:	RMB 1	; Pointer to where arrays start.
+bas_memlimit:	RMB 1	; Mmemory limit.
 program_end:	RMB 1	; Pointer to program's end.
 lfsr:		RMB 1	; Random number
 
