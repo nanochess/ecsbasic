@@ -56,6 +56,9 @@ Statements can be concatenated on a single line using the colon as a separator.
 
 The following expression operators are supported:
 
+    OR
+    XOR
+    AND
     =
     <>
     <
@@ -66,7 +69,8 @@ The following expression operators are supported:
     -
     *
     /
-    - (negation)
+    -expr
+    NOT expr
     (expr)
     num
     v

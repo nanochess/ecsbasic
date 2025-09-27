@@ -14,6 +14,7 @@
 	;                             Added negation operator. Added functions INT, ABS, SGN, and
 	;                             RND. Added REM, RESTORE, READ, and DATA.
 	; Revision date: Sep/26/2025. Added arrays with DIM.
+	; Revision date: Sep/27/2025. Added AND, XOR, OR, and NOT.
 	;
 
 	ROMW 16
@@ -27,6 +28,7 @@ start_for:	EQU memory_limit-64
 end_for:	EQU memory_limit
 start_gosub:	EQU memory_limit-128
 end_gosub:	EQU memory_limit-64
+bas_strings:	EQU memory_limit-192
 TOKEN_START:	EQU $0100
 TOKEN_COLON:	EQU $0100
 TOKEN_GOTO:	EQU $0108
@@ -38,18 +40,26 @@ TOKEN_STEP:	EQU $010e
 
 TOKEN_DATA:	EQU $0115
 
-TOKEN_LE:	EQU $0117
-TOKEN_GE:	EQU $0118
-TOKEN_NE:	EQU $0119
-TOKEN_EQ:	EQU $011A
-TOKEN_LT:	EQU $011B
-TOKEN_GT:	EQU $011C
+TOKEN_LE:	EQU $011D
+TOKEN_GE:	EQU $011E
+TOKEN_NE:	EQU $011F
+TOKEN_EQ:	EQU $0120
+TOKEN_LT:	EQU $0121
+TOKEN_GT:	EQU $0122
 
-TOKEN_FUNC:	EQU $011D
-TOKEN_INT:	EQU $011D
-TOKEN_ABS:	EQU $011E
-TOKEN_SGN:	EQU $011F
-TOKEN_RND:	EQU $0120
+TOKEN_FUNC:	EQU $0123
+TOKEN_INT:	EQU $0123
+TOKEN_ABS:	EQU $0124
+TOKEN_SGN:	EQU $0125
+TOKEN_RND:	EQU $0126
+TOKEN_AND:	EQU $0127
+TOKEN_NOT:	EQU $0128
+TOKEN_OR:	EQU $0129
+TOKEN_XOR:	EQU $012A
+TOKEN_STICK:	EQU $012B
+TOKEN_STRIG:	EQU $012C
+TOKEN_KEY:	EQU $012D
+TOKEN_BK:	EQU $012E
 
 ERR_TITLE:	EQU 0
 ERR_SYNTAX:	EQU 1
@@ -223,7 +233,7 @@ _ecs1:
 	MVII #1,R0
 	MVO R0,_border_color
 	MVII #$07,R0
-	MVO R0,bas_color
+	MVO R0,bas_curcolor
 
 	CALL bas_new
 	CALL bas_cls
@@ -338,6 +348,12 @@ keywords_exec:
 	DECLE bas_read
 	DECLE bas_data
 	DECLE bas_dim
+	DECLE bas_mode
+	DECLE bas_color
+	DECLE bas_define
+	DECLE bas_sprite
+	DECLE bas_wait
+	DECLE bas_sound	
 
 	; Operators and BASIC functions cannot be executed directly
 	DECLE bas_syntax_error	; <=
@@ -350,6 +366,14 @@ keywords_exec:
 	DECLE bas_syntax_error	; ABS
 	DECLE bas_syntax_error	; SGN
 	DECLE bas_syntax_error	; RND
+	DECLE bas_syntax_error	; AND
+	DECLE bas_syntax_error	; NOT
+	DECLE bas_syntax_error	; OR
+	DECLE bas_syntax_error	; XOR
+	DECLE bas_syntax_error	; STICK
+	DECLE bas_syntax_error	; TRIG
+	DECLE bas_syntax_error	; KEY
+	DECLE bas_syntax_error	; BK
 
 keywords:
 	DECLE ":",0	; $0100
@@ -374,8 +398,14 @@ keywords:
 	DECLE "RESTORE",0
 	DECLE "READ",0	; $0114
 	DECLE "DATA",0
-	DECLE "DIM",0	
-	DECLE "<=",0	; $0117
+	DECLE "DIM",0
+	DECLE "MODE",0	
+	DECLE "COLOR",0	; $0118
+	DECLE "DEFINE",0
+	DECLE "SPRITE",0
+	DECLE "WAIT",0
+	DECLE "SOUND",0	; $011C
+	DECLE "<=",0	; $011D
 	DECLE ">=",0
 	DECLE "<>",0
 	DECLE "=",0
@@ -385,6 +415,14 @@ keywords:
 	DECLE "ABS",0
 	DECLE "SGN",0
 	DECLE "RND",0
+	DECLE "AND",0
+	DECLE "NOT",0
+	DECLE "OR",0
+	DECLE "XOR",0
+	DECLE "STICK",0
+	DECLE "STRIG",0
+	DECLE "KEY",0
+	DECLE "BK",0
 	DECLE 0
 
 at_line:
@@ -430,7 +468,7 @@ bas_get_line:	PROC
 	PSHR R4
 	CALL bas_output
 	MVI bas_ttypos,R4
-	MVI bas_color,R0
+	MVI bas_curcolor,R0
 	MVO@ R0,R4
 	PULR R4
 	B @@2
@@ -894,7 +932,7 @@ bas_cls:	PROC
 	PSHR R4
 	MVII #$0200,R4	; Pointer to the screen.
 	MVO R4,bas_ttypos
-	MVI bas_color,R0
+	MVI bas_curcolor,R0
 	MVII #$00F0/2,R1
 @@1:	MVO@ R0,R4	; Erase the screen.
 	MVO@ R0,R4
@@ -1731,6 +1769,36 @@ bas_dim:	PROC
 	ENDP
 
 	;
+	; MODE
+	;
+bas_mode:
+
+	;
+	; COLOR
+	;
+bas_color:
+
+	;
+	; DEFINE
+	;
+bas_define:
+
+	;
+	; SPRITE
+	;
+bas_sprite:
+
+	;
+	; WAIT
+	;
+bas_wait:
+
+	;
+	; SOUND
+	;
+bas_sound:
+
+	;
 	; Syntax error (reserved keyword at wrong place) 
 	;
 bas_syntax_error:	PROC
@@ -1745,6 +1813,111 @@ bas_expr:	PROC
 	PSHR R5
 	CALL bas_expr1
 	CALL get_next
+	CMPI #TOKEN_OR,R0
+	BNE @@1
+	PSHR R2
+	PSHR R3
+	CALL bas_expr1
+	PSHR R4
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PULR R4
+	PULR R3
+	PULR R2
+	PSHR R4
+	PSHR R0
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	MOVR R0,R1
+	PULR R1
+	COMR R1
+	ANDR R1,R0
+	COMR R1
+	ADDR R1,R0
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	PULR PC
+
+@@1:	DECR R4
+	PULR PC
+	ENDP
+
+bas_expr1:	PROC
+	PSHR R5
+	CALL bas_expr2
+	CALL get_next
+	CMPI #TOKEN_XOR,R0
+	BNE @@1
+	PSHR R2
+	PSHR R3
+	CALL bas_expr2
+	PSHR R4
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PULR R4
+	PULR R3
+	PULR R2
+	PSHR R4
+	PSHR R0
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	MOVR R0,R1
+	PULR R1
+	XORR R1,R0
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	PULR PC
+
+@@1:	DECR R4
+	PULR PC
+	ENDP
+
+bas_expr2:	PROC
+	PSHR R5
+	CALL bas_expr3
+	CALL get_next
+	CMPI #TOKEN_AND,R0
+	BNE @@1
+	PSHR R2
+	PSHR R3
+	CALL bas_expr3
+	PSHR R4
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PULR R4
+	PULR R3
+	PULR R2
+	PSHR R4
+	PSHR R0
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	MOVR R0,R1
+	PULR R1
+	ANDR R1,R0
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	PULR PC
+
+@@1:	DECR R4
+	PULR PC
+	ENDP
+
+bas_expr3:	PROC
+	PSHR R5
+	CALL bas_expr4
+	CALL get_next
 	CMPI #TOKEN_LE,R0
 	BNC @@1
 	CMPI #TOKEN_GT+1,R0
@@ -1753,7 +1926,7 @@ bas_expr:	PROC
 	BNE @@2
 	PSHR R2
 	PSHR R3
-	CALL bas_expr1
+	CALL bas_expr4
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -1768,7 +1941,7 @@ bas_expr:	PROC
 	BNE @@3
 	PSHR R2
 	PSHR R3
-	CALL bas_expr1
+	CALL bas_expr4
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -1782,7 +1955,7 @@ bas_expr:	PROC
 	BNE @@4
 	PSHR R2
 	PSHR R3
-	CALL bas_expr1
+	CALL bas_expr4
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -1796,7 +1969,7 @@ bas_expr:	PROC
 	BNE @@5
 	PSHR R2
 	PSHR R3
-	CALL bas_expr1
+	CALL bas_expr4
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -1810,7 +1983,7 @@ bas_expr:	PROC
 	BNE @@6
 	PSHR R2
 	PSHR R3
-	CALL bas_expr1
+	CALL bas_expr4
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -1822,7 +1995,7 @@ bas_expr:	PROC
 @@6:
 	PSHR R2
 	PSHR R3
-	CALL bas_expr1
+	CALL bas_expr4
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -1845,16 +2018,16 @@ bas_expr:	PROC
 
 	ENDP
 
-bas_expr1:	PROC
+bas_expr4:	PROC
 	PSHR R5
-	CALL bas_expr2
+	CALL bas_expr5
 @@0:
 	CALL get_next
 	CMPI #$2b,R0
 	BNE @@1
 	PSHR R2
 	PSHR R3
-	CALL bas_expr2
+	CALL bas_expr5
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -1869,7 +2042,7 @@ bas_expr1:	PROC
 	BNE @@2
 	PSHR R2
 	PSHR R3
-	CALL bas_expr2
+	CALL bas_expr5
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -1883,16 +2056,16 @@ bas_expr1:	PROC
 	PULR PC
 	ENDP
 
-bas_expr2:	PROC
+bas_expr5:	PROC
 	PSHR R5
-	CALL bas_expr3
+	CALL bas_expr6
 @@0:
 	CALL get_next
 	CMPI #$2a,R0
 	BNE @@1
 	PSHR R2
 	PSHR R3
-	CALL bas_expr3
+	CALL bas_expr6
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -1907,7 +2080,7 @@ bas_expr2:	PROC
 	BNE @@2
 	PSHR R2
 	PSHR R3
-	CALL bas_expr3
+	CALL bas_expr6
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -1921,25 +2094,39 @@ bas_expr2:	PROC
 	PULR PC
 	ENDP
 
-bas_expr3:	PROC
+bas_expr6:	PROC
 	PSHR R5
 	CALL get_next
 	CMPI #$2D,R0	; Minus?
 	BNE @@1
-	CALL bas_expr4
+	CALL bas_expr7
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fpneg
 	MOVR R0,R2
 	MOVR R1,R3
 	PULR PC
+	
+@@1:	CMPI #TOKEN_NOT,R0	; NOT?
+	BNE @@2
+	CALL bas_expr7
+	PSHR R4
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	COMR R0
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	PULR PC
 
-@@1:	DECR R4
-	CALL bas_expr4
+@@2:	DECR R4
+	CALL bas_expr7
 	PULR PC
 	ENDP
 
-bas_expr4:	PROC
+bas_expr7:	PROC
 	PSHR R5
 	CALL get_next
 	
@@ -2114,7 +2301,7 @@ bas_blink_cursor:	PROC
 	MVI _frame,R0
 	ANDI #16,R0
 	BEQ @@1
-	MVI bas_color,R1
+	MVI bas_curcolor,R1
 	ADDI #$5F*8,R1
 @@1:	MVI bas_ttypos,R4
 	MVO@ R1,R4
@@ -2158,7 +2345,7 @@ bas_output:	PROC
 	ANDI #$FF,R0	
 	SLL R0,2	; Convert character to card number.
 	SLL R0,1
-	ADD bas_color,R0
+	ADD bas_curcolor,R0
 	MVI bas_ttypos,R4
 	MVO@ R0,R4	; Put on the screen.
 	CMPI #$02F0,R4	; Reached the screen limit?
@@ -2253,7 +2440,7 @@ bas_output:	PROC
 	DECR R2
 	BNE @@2
 	; Clear the bottom row.
-	MVI bas_color,R0
+	MVI bas_curcolor,R0
 	MVII #$0014/2,R2
 @@9:	MVO@ R0,R5
 	MVO@ R0,R5
@@ -2605,7 +2792,7 @@ _col7:      RMB 1       ; Collision status for MOB7
 _mobs:	RMB 24
 bas_firstpos:	RMB 1	; First position of cursor.
 bas_ttypos:	RMB 1	; Current position on screen.
-bas_color:	RMB 1	; Current color.
+bas_curcolor:	RMB 1	; Current color.
 bas_card:	RMB 1	; Card under the cursor.
 bas_curline:	RMB 1	; Current line in execution (0 for direct command)
 bas_forptr:	RMB 1	; Stack for FOR loops.
