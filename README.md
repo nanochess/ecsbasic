@@ -52,6 +52,12 @@ The following statements are supported:
     DATA v
     DATA v,v
     COLOR v
+    SPRITE [0-7],x,y,c
+    SOUND 0,[f][,v]
+    SOUND 1,[f][,v]
+    SOUND 2,[f][,v]
+    SOUND 3,[f][,env]
+    SOUND 4,[noise][,mix]
     WAIT        
 
 Statements can be concatenated on a single line using the colon as a separator.

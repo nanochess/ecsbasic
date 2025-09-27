@@ -14,7 +14,8 @@
 	;                             Added negation operator. Added functions INT, ABS, SGN, and
 	;                             RND. Added REM, RESTORE, READ, and DATA.
 	; Revision date: Sep/26/2025. Added arrays with DIM.
-	; Revision date: Sep/27/2025. Added AND, XOR, OR, and NOT.
+	; Revision date: Sep/27/2025. Added AND, XOR, OR, and NOT. Implemented COLOR, WAIT,
+	;                             SPRITE, and SOUND.
 	;
 
 	ROMW 16
@@ -229,6 +230,13 @@ _ecs1:
 
 	CALL _set_isr
 	DECLE _int_vector
+
+	CLRR R0
+	MVO R0,$01fb
+	MVO R0,$01fc
+	MVO R0,$01fd
+	MVII #$38,R0
+	MVO R0,$01f8
 
 	MVII #1,R0
 	MVO R0,_border_color
@@ -1778,12 +1786,7 @@ bas_mode:
 	;
 bas_color:	PROC
 	PSHR R5
-	CALL bas_expr
-	PSHR R4
-	MOVR R2,R0
-	MOVR R3,R1
-	CALL fp2int
-	PULR R4
+	CALL bas_expr_int
 	MVO R0,bas_curcolor
 	PULR PC
 	ENDP
@@ -1796,7 +1799,65 @@ bas_define:
 	;
 	; SPRITE
 	;
-bas_sprite:
+bas_sprite:	PROC
+	PSHR R5
+	CALL bas_expr_int
+	CMPI #8,R0
+	BC @@1
+	ADDI #_mobs,R0
+	PSHR R0
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@2
+
+	CALL get_next
+	CMPI #$2C,R0
+	BEQ @@4
+	DECR R4
+	CALL bas_expr_int
+	PULR R3
+	PSHR R3
+	MVO@ R0,R3
+	CALL get_next
+	CMPI #TOKEN_COLON,R0
+	BEQ @@3
+	TSTR R0
+	BEQ @@3
+	CMPI #$2C,R0
+	BNE @@2
+@@4:
+	CALL get_next
+	CMPI #$2C,R0
+	BEQ @@5
+	DECR R4
+	CALL bas_expr_int
+	PULR R3
+	PSHR R3
+	ADDI #8,R3
+	MVO@ R0,R3
+	CALL get_next
+	CMPI #TOKEN_COLON,R0
+	BEQ @@3
+	TSTR R0
+	BEQ @@3
+	CMPI #$2C,R0
+	BNE @@2
+@@5:
+	CALL bas_expr_int
+	PULR R3
+	ADDI #16,R3
+	MVO@ R0,R3
+	INCR R7
+
+@@3:	DECR R4
+	PULR PC
+
+@@1:	MVII #ERR_BOUNDS,R0
+	CALL bas_error
+
+@@2:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+	ENDP
 
 	;
 	; WAIT
@@ -1815,7 +1876,111 @@ bas_wait:	PROC
 	;
 	; SOUND
 	;
-bas_sound:
+bas_sound:	PROC
+	PSHR R5
+	CALL bas_expr_int
+	PSHR R0
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@5
+	CALL get_next
+	CMPI #$2C,R0
+	BEQ @@12
+	DECR R4
+@@12:
+	PULR R1
+	TSTR R1
+	BEQ @@0
+	DECR R1
+	BEQ @@1
+	DECR R1
+	BEQ @@2
+	DECR R1
+	BEQ @@3
+	DECR R1
+	BEQ @@4
+	MVII #ERR_BOUNDS,R0
+	CALL bas_error
+
+@@5:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+
+	; SOUND 0,freq,vol
+@@0:	CMPI #$2C,R0
+	BEQ @@6
+	CALL bas_expr_int
+	MVO R0,$01f0
+	SWAP R0
+	MVO R0,$01F4
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@11
+@@6:
+	CALL bas_expr_int
+	MVO R0,$01FB
+	PULR PC
+
+	; SOUND 1,freq,vol
+@@1:	CMPI #$2C,R0
+	BEQ @@7
+	CALL bas_expr_int
+	MVO R0,$01F1
+	SWAP R0
+	MVO R0,$01F5
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@11
+@@7:
+	CALL bas_expr_int
+	MVO R0,$01fc
+	PULR PC
+
+	; SOUND 2,freq,vol
+@@2:	CMPI #$2C,R0
+	BEQ @@8
+	CALL bas_expr_int
+	MVO R0,$01F2
+	SWAP R0
+	MVO R0,$01F6
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@11
+@@8:
+	CALL bas_expr_int
+	MVO R0,$01fd
+	PULR PC
+
+	; SOUND 3,freq,env
+@@3:	CMPI #$2C,R0
+	BEQ @@9
+	CALL bas_expr_int
+	MVO R0,$01F3
+	SWAP R0
+	MVO R0,$01F7
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@11
+@@9:
+	CALL bas_expr_int
+	MVO R0,$01fa
+	PULR PC
+
+	; SOUND 4,noise,mix
+@@4:	CMPI #$2C,R0
+	BEQ @@10
+	CALL bas_expr_int
+	MVO R0,$01F9
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@11
+@@10:
+	CALL bas_expr_int
+	MVO R0,$01f8
+	PULR PC
+
+@@11:	DECR R4
+	PULR PC
+	ENDP
 
 	;
 	; Syntax error (reserved keyword at wrong place) 
@@ -1823,6 +1988,20 @@ bas_sound:
 bas_syntax_error:	PROC
 	MVII #ERR_SYNTAX,R0
 	CALL bas_error
+	ENDP
+
+	;
+	; Expresion evaluation and conversion to integer
+	;
+bas_expr_int:	PROC
+	PSHR R5
+	CALL bas_expr
+	PSHR R4
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PULR R4
+	PULR PC
 	ENDP
 
 	;
