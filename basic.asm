@@ -1801,7 +1801,16 @@ bas_sprite:
 	;
 	; WAIT
 	;
-bas_wait:
+bas_wait:	PROC
+	PSHR R5
+@@1:
+	MVI _int,R0
+	TSTR R0
+	BEQ @@1
+	CLRR R0
+	MVO R0,_int
+	PULR PC
+	ENDP
 
 	;
 	; SOUND

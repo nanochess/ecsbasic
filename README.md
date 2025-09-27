@@ -52,6 +52,7 @@ The following statements are supported:
     DATA v
     DATA v,v
     COLOR v
+    WAIT        
 
 Statements can be concatenated on a single line using the colon as a separator.
 
