@@ -18,6 +18,7 @@
 	;                             SPRITE, SOUND, STICK, STRIG, KEY, BK, MODE, BORDER, and
 	;                             DEFINE. Corrections for working in real hardware. Added
 	;                             keyboard debouncing. LIST allows for ranges.
+	; Revision date: Sep/28/2025. Added POKE, PEEK, and USR.
 	;
 
 	ROMW 16
@@ -45,27 +46,28 @@ TOKEN_STEP:	EQU $010e
 
 TOKEN_DATA:	EQU $0115
 
-TOKEN_AND:	EQU $011e
-TOKEN_NOT:	EQU $011f
-TOKEN_OR:	EQU $0120
-TOKEN_XOR:	EQU $0121
+TOKEN_AND:	EQU $011f
+TOKEN_NOT:	EQU $0120
+TOKEN_OR:	EQU $0121
+TOKEN_XOR:	EQU $0122
 
-TOKEN_LE:	EQU $0122
-TOKEN_GE:	EQU $0123
-TOKEN_NE:	EQU $0124
-TOKEN_EQ:	EQU $0125
-TOKEN_LT:	EQU $0126
-TOKEN_GT:	EQU $0127
+TOKEN_LE:	EQU $0123
+TOKEN_GE:	EQU $0124
+TOKEN_NE:	EQU $0125
+TOKEN_EQ:	EQU $0126
+TOKEN_LT:	EQU $0127
+TOKEN_GT:	EQU $0128
 
-TOKEN_FUNC:	EQU $0128
-TOKEN_INT:	EQU $0128
-TOKEN_ABS:	EQU $0129
-TOKEN_SGN:	EQU $012a
-TOKEN_RND:	EQU $012b
-TOKEN_STICK:	EQU $012c
-TOKEN_STRIG:	EQU $012d
-TOKEN_KEY:	EQU $012e
-TOKEN_BK:	EQU $012f
+TOKEN_FUNC:	EQU $0129
+TOKEN_INT:	EQU $0129
+TOKEN_ABS:	EQU $012a
+TOKEN_SGN:	EQU $012b
+TOKEN_RND:	EQU $012c
+TOKEN_STICK:	EQU $012d
+TOKEN_STRIG:	EQU $012e
+TOKEN_KEY:	EQU $012f
+TOKEN_BK:	EQU $0130
+TOKEN_PEEK:	EQU $0131
 
 ERR_TITLE:	EQU 0
 ERR_SYNTAX:	EQU 1
@@ -373,6 +375,7 @@ keywords_exec:
 	DECLE bas_wait
 	DECLE bas_sound	
 	DECLE bas_border
+	DECLE bas_poke
 
 	; Operators and BASIC functions cannot be executed directly
 	DECLE bas_syntax_error	; AND
@@ -425,11 +428,12 @@ keywords:
 	DECLE "WAIT",0
 	DECLE "SOUND",0	; $011C
 	DECLE "BORDER",0
-	DECLE "AND",0	; $011e
+	DECLE "POKE",0	
+	DECLE "AND",0	; $011F
 	DECLE "NOT",0
 	DECLE "OR",0
 	DECLE "XOR",0
-	DECLE "<=",0	; $0122
+	DECLE "<=",0	; $0123
 	DECLE ">=",0
 	DECLE "<>",0
 	DECLE "=",0
@@ -443,6 +447,8 @@ keywords:
 	DECLE "STRIG",0
 	DECLE "KEY",0
 	DECLE "BK",0
+	DECLE "PEEK",0
+	DECLE "USR",0
 	DECLE 0
 
 at_line:
@@ -2138,6 +2144,26 @@ bas_border:	PROC
 	ENDP
 
 	;
+	; POKE
+	;
+bas_poke:	PROC
+	PSHR R5
+	CALL bas_expr_int
+	PSHR R0
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@1
+	CALL bas_expr_int
+	PULR R1
+	MVO@ R0,R1
+	PULR PC
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+
+	ENDP
+
+	;
 	; BK(v) = v
 	;
 bas_bk:	PROC
@@ -2499,7 +2525,7 @@ bas_expr7:	PROC
 	BNC @@6
 	MOVR R0,R1
 	ADDI #@@0-TOKEN_FUNC,R1
-	CMPI #@@0+8,R1
+	CMPI #@@0+10,R1
 	BC @@6
 	MVI@ R1,R7
 @@0:
@@ -2511,6 +2537,8 @@ bas_expr7:	PROC
 	DECLE @@STRIG
 	DECLE @@KEY
 	DECLE @@BK
+	DECLE @@PEEK
+	DECLE @@USR
 
 @@RND:
 	PSHR R4
@@ -2641,6 +2669,31 @@ bas_expr7:	PROC
 	MOVR R0,R2
 	MOVR R1,R3
 	PULR PC
+
+	; PEEK(v) Read memory
+@@PEEK:
+	CALL bas_expr_paren
+	CALL fp2int
+	MOVR R0,R1
+	MVI@ R1,R0
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR PC
+
+	; USR(v) Call and receive value
+@@USR:
+	CALL bas_expr_paren
+	CALL fp2int
+	CALL @@indirect
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR PC
+
+@@indirect:
+	MOVR R0,PC
+
 @@6:
 	CMPI #$28,R0	; Parenthesis?
 	BNE @@5

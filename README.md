@@ -68,6 +68,7 @@ The following statements are supported:
     MODE 1
     BORDER color
     DEFINE card,"hex.drawing"
+    POKE addr,v
 
 Statements can be concatenated on a single line using the colon as a separator.
 
@@ -100,6 +101,8 @@ The following expression operators are supported:
     STRIG(cont)
     KEY(cont)
     BK(pos)
+    PEEK(addr)
+    USR(addr)
 
 Currently, the number input only allows for 16-bit integers, that are translated to floating-point. However, the number output is able to show fractions, and exponents.
 
