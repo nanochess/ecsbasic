@@ -17,7 +17,7 @@
 	; Revision date: Sep/27/2025. Added AND, XOR, OR, and NOT. Implemented COLOR, WAIT,
 	;                             SPRITE, SOUND, STICK, STRIG, KEY, BK, MODE, BORDER, and
 	;                             DEFINE. Corrections for working in real hardware. Added
-	;                             keyboard debouncing.
+	;                             keyboard debouncing. LIST allows for ranges.
 	;
 
 	ROMW 16
@@ -879,11 +879,51 @@ bas_execute:	PROC
 	;
 bas_list:	PROC
 	PSHR R5
+	CALL get_next	; Check for line number.
+	CMPI #$30,R0
+	BNC @@10
+	CMPI #$3A,R0
+	BC @@10
+	CALL parse_integer
+	MVO R0,bas_listen
 	PSHR R4
+	CALL line_search
+	B @@11
+
+@@10:	DECR R4
+	PSHR R4
+	MVII #$FFFF,R0
+	MVO R0,bas_listen
 	MVII #program_start,R4
+@@11:	MOVR R4,R5	; Save start pointer.
+	PULR R4
+	PSHR R5
+	CALL get_next
+	CMPI #$2D,R0	; Range?
+	BNE @@12	; No, jump.
+	MVII #$FFFF,R0
+	MVO R0,bas_listen
+	CALL get_next
+	CMPI #$30,R0	; Number?
+	BNC @@12	; No, jump.
+	CMPI #$3A,R0
+	BC @@12
+	CALL parse_integer
+	MVO R0,bas_listen
+	INCR R7
+
+@@12:	DECR R4
+	PULR R5
+	PSHR R4
+	MOVR R5,R4
+
 @@1:	MVI@ R4,R0
 	TSTR R0		; End of the program?
 	BEQ @@2		; Yes, jump.
+	CMP bas_listen,R0	; Line limit?
+	BEQ @@15
+	BC @@2
+@@15:
 	PSHR R4
 	CALL PRNUM16.l
 	MVII #$20,R0	; Space.
@@ -932,6 +972,7 @@ bas_list:	PROC
 
 @@2:	PULR R4
 	PULR PC
+
 	ENDP
 
 	;
@@ -1118,22 +1159,12 @@ bas_input:	PROC
 bas_goto:	PROC
 	PSHR R5
 	; !!! Change for expression evaluation
-	CLRR R2
 	CALL get_next
-@@1:	CMPI #$30,R0
-	BNC @@2
+	CMPI #$30,R0
+	BNC @@1
 	CMPI #$3A,R0
-	BC @@2
-	SUBI #$30,R0
-	MOVR R2,R1
-	SLL R2,2
-	ADDR R1,R2		; x5
-	ADDR R2,R2		; x10
-	ADDR R0,R2
-	MVI@ R4,R0
-	B @@1
-
-@@2:	MOVR R2,R0
+	BC @@1
+	CALL parse_integer
 	CALL line_search
 	CMPR R1,R0
 	BEQ @@3
@@ -1150,6 +1181,9 @@ bas_goto:	PROC
 @@4:
 	MVII #STACK,R6
 	B bas_run.1
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
 	ENDP
 
 	;
@@ -1464,22 +1498,12 @@ bas_next:	PROC
 bas_gosub:	PROC
 	PSHR R5
 	; !!! Change for expression evaluation
-	CLRR R2
 	CALL get_next
-@@1:	CMPI #$30,R0
-	BNC @@2
+	CMPI #$30,R0
+	BNC @@1
 	CMPI #$3A,R0
-	BC @@2
-	SUBI #$30,R0
-	MOVR R2,R1
-	SLL R2,2
-	ADDR R1,R2		; x5
-	ADDR R2,R2		; x10
-	ADDR R0,R2
-	MVI@ R4,R0
-	B @@1
-
-@@2:	DECR R4
+	BC @@1
+	CALL parse_integer
 	CALL get_next_point
 	MVI bas_gosubptr,R5
 	CMPI #end_gosub-2,R5
@@ -1508,6 +1532,10 @@ bas_gosub:	PROC
 
 @@5:	MVII #ERR_GOSUB,R0
 	CALL bas_error
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+
 	ENDP
 
 	;
@@ -1573,22 +1601,8 @@ bas_restore:	PROC
 	BNC @@1
 	CMPI #$3A,R0
 	BC @@1
-	CLRR R2
-@@4:
-	SUBI #$30,R0
-	MOVR R2,R1
-	SLL R2,2
-	ADDR R1,R2		; x5
-	ADDR R2,R2		; x10
-	ADDR R0,R2
-	MVI@ R4,R0
-	CMPI #$30,R0
-	BNC @@3
-	CMPI #$3A,R0
-	BNC @@4
-@@3:	DECR R4
+	CALL parse_integer
 	PSHR R4
-	MOVR R2,R0
 	CALL line_search
 	CMPR R1,R0
 	BNE @@5		; Jump if not found.
@@ -2654,7 +2668,6 @@ bas_expr7:	PROC
 	; Parse an integer.
 	;
 parse_integer:	PROC
-	PSHR R5
 	CLRR R2
 @@1:
 	SUBI #$30,R0
@@ -2667,12 +2680,11 @@ parse_integer:	PROC
 	CMPI #$30,R0
 	BNC @@3
 	CMPI #$3A,R0
-	BC @@3
-	B @@1
+	BNC @@1
 @@3:
 	DECR R4
 	MOVR R2,R0
-	PULR PC
+	MOVR R5,PC
 	ENDP
 
 parse_number:	PROC
@@ -3214,6 +3226,8 @@ bas_dataptr:	RMB 1	; Pointer for DATA.
 bas_arrays:	RMB 1	; Pointer to where arrays start.
 bas_last_array:	RMB 1	; Pointer to end of array list.
 bas_memlimit:	RMB 1	; Mmemory limit.
+bas_listst:	RMB 1	; Start of LIST.
+bas_listen:	RMB 1	; End of LIST.
 program_end:	RMB 1	; Pointer to program's end.
 lfsr:		RMB 1	; Random number
 _mode_color:	RMB 1	; Colors for Color Stack mode.
