@@ -16,7 +16,8 @@
 	; Revision date: Sep/26/2025. Added arrays with DIM.
 	; Revision date: Sep/27/2025. Added AND, XOR, OR, and NOT. Implemented COLOR, WAIT,
 	;                             SPRITE, SOUND, STICK, STRIG, KEY, BK, MODE, BORDER, and
-	;                             DEFINE.
+	;                             DEFINE. Corrections for working in real hardware. Added
+	;                             keyboard debouncing.
 	;
 
 	ROMW 16
@@ -691,8 +692,7 @@ bas_tokenize:	PROC
 	BC @@3
 	SUBI #$10,R0
 	MOVR R2,R1
-	ADDR R2,R2		; x2
-	ADDR R2,R2		; x4
+	SLL R2,2
 	ADDR R1,R2		; x5
 	ADDR R2,R2		; x10
 	ADDR R0,R2
@@ -868,8 +868,7 @@ bas_execute:	PROC
 	MVII #ERR_SYNTAX,R0
 	CALL bas_error
 
-@@2:	SUBI #TOKEN_START,R0
-	MVII #keywords_exec,R3
+@@2:	MVII #keywords_exec-TOKEN_START,R3
 	ADDR R0,R3
 	PULR R5
 	MVI@ R3,PC
@@ -1127,8 +1126,7 @@ bas_goto:	PROC
 	BC @@2
 	SUBI #$30,R0
 	MOVR R2,R1
-	ADDR R2,R2		; x2
-	ADDR R2,R2		; x4
+	SLL R2,2
 	ADDR R1,R2		; x5
 	ADDR R2,R2		; x10
 	ADDR R0,R2
@@ -1474,8 +1472,7 @@ bas_gosub:	PROC
 	BC @@2
 	SUBI #$30,R0
 	MOVR R2,R1
-	ADDR R2,R2		; x2
-	ADDR R2,R2		; x4
+	SLL R2,2
 	ADDR R1,R2		; x5
 	ADDR R2,R2		; x10
 	ADDR R0,R2
@@ -1580,8 +1577,7 @@ bas_restore:	PROC
 @@4:
 	SUBI #$30,R0
 	MOVR R2,R1
-	ADDR R2,R2		; x2
-	ADDR R2,R2		; x4
+	SLL R2,2
 	ADDR R1,R2		; x5
 	ADDR R2,R2		; x10
 	ADDR R0,R2
@@ -2168,20 +2164,14 @@ bas_expr:	PROC
 	CALL get_next
 	CMPI #TOKEN_OR,R0
 	BNE @@1
-	PSHR R2
-	PSHR R3
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PSHR R0
 	CALL bas_expr1
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
-	PULR R3
-	PULR R2
-	PSHR R4
-	PSHR R0
-	MOVR R2,R0
-	MOVR R3,R1
-	CALL fp2int
-	MOVR R0,R1
 	PULR R1
 	COMR R1
 	ANDR R1,R0
@@ -2190,7 +2180,6 @@ bas_expr:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
-	PULR R4
 	PULR PC
 
 @@1:	DECR R4
@@ -2203,26 +2192,19 @@ bas_expr1:	PROC
 	CALL get_next
 	CMPI #TOKEN_XOR,R0
 	BNE @@1
-	PSHR R2
-	PSHR R3
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PSHR R0
 	CALL bas_expr2
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
-	PULR R3
-	PULR R2
-	PSHR R4
-	PSHR R0
-	MOVR R2,R0
-	MOVR R3,R1
-	CALL fp2int
-	MOVR R0,R1
 	PULR R1
 	XORR R1,R0
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
-	PULR R4
 	PULR PC
 
 @@1:	DECR R4
@@ -2235,26 +2217,19 @@ bas_expr2:	PROC
 	CALL get_next
 	CMPI #TOKEN_AND,R0
 	BNE @@1
-	PSHR R2
-	PSHR R3
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PSHR R0
 	CALL bas_expr3
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
-	PULR R3
-	PULR R2
-	PSHR R4
-	PSHR R0
-	MOVR R2,R0
-	MOVR R3,R1
-	CALL fp2int
-	MOVR R0,R1
 	PULR R1
 	ANDR R1,R0
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
-	PULR R4
 	PULR PC
 
 @@1:	DECR R4
@@ -2457,7 +2432,6 @@ bas_expr6:	PROC
 @@1:	CMPI #TOKEN_NOT,R0	; NOT?
 	BNE @@2
 	CALL bas_expr7
-	PSHR R4
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
@@ -2465,7 +2439,6 @@ bas_expr6:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
-	PULR R4
 	PULR PC
 
 @@2:	DECR R4
@@ -2520,32 +2493,25 @@ bas_expr7:	PROC
 	PULR PC
 @@INT:
 	CALL bas_expr_paren
-	PSHR R4
 	CALL fpint
-	PULR R4
 	MOVR R0,R2
 	MOVR R1,R3
 	PULR PC
 @@SGN:
 	CALL bas_expr_paren
-	PSHR R4
 	CALL fpsgn
-	PULR R4
 	MOVR R0,R2
 	MOVR R1,R3
 	PULR PC
 @@ABS:
 	CALL bas_expr_paren
-	PSHR R4
 	CALL fpabs
-	PULR R4
 	MOVR R0,R2
 	MOVR R1,R3
 	PULR PC
 
 @@STICK:
 	CALL bas_expr_paren
-	PSHR R4
 	CALL fp2int
 	CMPI #2,R0
 	BC @@3
@@ -2570,7 +2536,6 @@ bas_expr7:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
-	PULR R4
 	PULR PC
 
 @@TABLE:
@@ -2581,7 +2546,6 @@ bas_expr7:	PROC
 
 @@STRIG:
 	CALL bas_expr_paren
-	PSHR R4
 	CALL fp2int
 	CMPI #2,R0
 	BC @@3
@@ -2606,11 +2570,9 @@ bas_expr7:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
-	PULR R4
 	PULR PC
 @@KEY:
 	CALL bas_expr_paren
-	PSHR R4
 	CALL fp2int
 	CMPI #2,R0
 	BC @@3
@@ -2619,12 +2581,12 @@ bas_expr7:	PROC
 	MVI@ R1,R1
 	XORI #$FF,R1
 	CLRR R0
-	MVII #@@KEYS,R4
+	MVII #@@KEYS,R5
 @@9:
-	CMP@ R4,R1
+	CMP@ R5,R1
 	BEQ @@8
 	INCR R0
-	CMP@ R4,R1
+	CMP@ R5,R1
 	BEQ @@8
 	INCR R0
 	CMPI #12,R0
@@ -2633,7 +2595,6 @@ bas_expr7:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
-	PULR R4
 	PULR PC
 
 @@KEYS:
@@ -2642,7 +2603,6 @@ bas_expr7:	PROC
 	; BK(v) Read screen
 @@BK:
 	CALL bas_expr_paren
-	PSHR R4
 	CALL fp2int
 	CMPI #240,R0
 	BC @@3
@@ -2652,7 +2612,6 @@ bas_expr7:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
-	PULR R4
 	PULR PC
 @@6:
 	CMPI #$28,R0	; Parenthesis?
@@ -2700,10 +2659,9 @@ parse_integer:	PROC
 @@1:
 	SUBI #$30,R0
 	MOVR R2,R1
-	ADDR R2,R2
-	ADDR R2,R2
-	ADDR R1,R2
-	ADDR R2,R2
+	SLL R2,2	; x4
+	ADDR R1,R2	; x5
+	ADDR R2,R2	; x10
 	ADDR R0,R2
 @@2:	MVI@ R4,R0
 	CMPI #$30,R0
@@ -2729,8 +2687,7 @@ parse_number:	PROC
 @@4:
 	SUBI #$30,R0
 	MOVR R2,R1
-	ADDR R2,R2
-	ADDR R2,R2
+	SLL R2,2
 	ADDR R1,R2
 	ADDR R2,R2
 	ADDR R0,R2
@@ -2769,6 +2726,12 @@ bas_save_cursor:	PROC
 	; Show blinking cursor.
 	;
 bas_blink_cursor:	PROC
+@@0:	MVI _int,R0
+	TSTR R0
+	BEQ @@0
+	CLRR R0
+	MVO R0,_int
+
 	MVI bas_card,R1
 	MVI _frame,R0
 	ANDI #16,R0
@@ -3216,6 +3179,14 @@ _int_vector:     PROC
 	INCR R0
 	MVO R0,_frame
 
+	; Keyboard debounce
+	MVI _debounce,R0
+	TSTR R0
+	BEQ @@3
+	DECR R0
+	MVO R0,_debounce
+@@3:	
+	; Adjust random number generator
 	MVI lfsr,R0
 	INCR R0
 	INCR R0
@@ -3267,5 +3238,6 @@ _border_color:  RMB 1   ; Border color
 _border_mask:   RMB 1   ; Border mask
 _gram_target:	RMB 1	; Target GRAM card.
 _gram_total:	RMB 1	; Total of GRAM cards.
+_debounce:	RMB 1	; Keyboard debounce.
 ECS_KEY_LAST:	RMB 1	; ECS last key pressed.
 temp1:		RMB 1	; Temporary value.

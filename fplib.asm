@@ -441,13 +441,13 @@ fpfromuint:	PROC
 	;
 fpint:	PROC
 	PSHR R5
-	MOVR R1,R4
-	ANDI #$007F,R4
-	CMPI #FPEXP_BIAS+$18,R4
+	MOVR R1,R5
+	ANDI #$007F,R5
+	CMPI #FPEXP_BIAS+$18,R5
  	BC @@2		; No fraction in this number.
 	CLRR R2
 	CLRR R3
-	SUBI #FPEXP_BIAS,R4
+	SUBI #FPEXP_BIAS,R5
 	BC @@3		; Jump if there is an integer part.
 	CLRR R0		; Zero.
 	CLRR R1
@@ -457,7 +457,7 @@ fpint:	PROC
 @@4:	SETC
 	RRC R2,1
 	RRC R3,1
-	DECR R4
+	DECR R5
 	BNE @@4
 @@5:	ADDI #$00FF,R3
 	ANDR R2,R0
