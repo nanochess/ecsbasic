@@ -31,6 +31,7 @@ The following statements are supported:
     LIST line-
     LIST line-line
     RUN
+    RUN line
     NEW
     REM comment
     DIM a(length)

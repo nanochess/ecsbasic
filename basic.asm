@@ -1010,6 +1010,21 @@ bas_cls:	PROC
 	;
 bas_run:	PROC
 	MVII #STACK,R6
+
+	CALL get_next
+	CMPI #$30,R0
+	BNC @@2
+	CMPI #$3A,R0
+	BC @@2
+	CALL parse_integer
+	CALL line_search
+	CMPR R1,R0
+	BEQ @@3		; Jump if found.
+	MVII #ERR_LINE,R0
+	CALL bas_error
+
+@@2:	MVII #program_start,R4
+@@3:	PSHR R4
 	MVII #start_for,R0
 	MVO R0,bas_forptr
 	MVII #start_gosub,R0
@@ -1026,8 +1041,7 @@ bas_run:	PROC
 	CLRR R0			; No arrays.
 	MVO@ R0,R3
 	MVO R3,bas_last_array
-
-	MVII #program_start,R4
+	PULR R4	
 @@1:
 	CALL bas_execute_line
 	B basic_restart
