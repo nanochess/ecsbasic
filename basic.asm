@@ -3179,13 +3179,6 @@ _int_vector:     PROC
 	INCR R0
 	MVO R0,_frame
 
-	; Keyboard debounce
-	MVI _debounce,R0
-	TSTR R0
-	BEQ @@3
-	DECR R0
-	MVO R0,_debounce
-@@3:	
 	; Adjust random number generator
 	MVI lfsr,R0
 	INCR R0
@@ -3238,6 +3231,5 @@ _border_color:  RMB 1   ; Border color
 _border_mask:   RMB 1   ; Border mask
 _gram_target:	RMB 1	; Target GRAM card.
 _gram_total:	RMB 1	; Total of GRAM cards.
-_debounce:	RMB 1	; Keyboard debounce.
 ECS_KEY_LAST:	RMB 1	; ECS last key pressed.
 temp1:		RMB 1	; Temporary value.
