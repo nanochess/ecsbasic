@@ -110,6 +110,9 @@ The following expression operators are supported:
     BK(pos)
     PEEK(addr)
     USR(addr)
+    ASC(str)
+    LEN(str)
+    CHR$(expr)
 
 String support allows comparison between strings, and string concatenation. There's no support for arrays of strings.
 

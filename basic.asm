@@ -20,15 +20,18 @@
 	;                             keyboard debouncing. LIST allows for ranges.
 	; Revision date: Sep/28/2025. Added POKE, PEEK, and USR.
 	; Revision date: Oct/02/2025. Allows to assign, concatenate, compare, print, input, and
-	;                             read strings. 
+	;                             read strings. Added limit detection to bas_get_line.
+	;                             Added limit detection to the tokenizer.
+	; Revision date: Oct/03/2025. Added ASC, LEN, and CHR$.
 	;
 
 	;
 	; TODO:
-	; * If tokenizes DATA, avoid tokenizing until finding colon.
-	; * Detect crash between bas_last_array and bas_strptr.
+	; * Maybe if tokenizes DATA, avoid tokenizing until finding colon.
 	; * Collapse bas_strptr.
+	; * Add TIMER to access current video frame number.
 	;
+
 	ROMW 16
 	ORG $5000
 
@@ -39,6 +42,7 @@
 	;
 
 basic_buffer:	EQU $8040	; Tokenized buffer.
+basic_buffer_end:	EQU $807F
 variables:	EQU $8080	; A-Z
 strings:	EQU $80E8	; A$-Z$
 program_start:	EQU $8120
@@ -98,6 +102,7 @@ ERR_MEMORY:	EQU 10
 ERR_ARRAY:	EQU 11
 ERR_BOUNDS:	EQU 12
 ERR_TYPE:	EQU 13
+ERR_TOOBIG:	EQU 14
 
 KEY.LEFT    EQU     $1C     ; \   Can't be generated otherwise, so perfect
 KEY.RIGHT   EQU     $1D     ;  |_ candidates.  Could alternately send 8 for
@@ -473,6 +478,9 @@ keywords:
 	DECLE "BK",0
 	DECLE "PEEK",0
 	DECLE "USR",0
+	DECLE "ASC",0
+	DECLE "LEN",0
+	DECLE "CHR$",0
 	DECLE 0
 
 	;
@@ -495,6 +503,7 @@ errors:
 	DECLE "Undefined array",0
 	DECLE "Out of bounds",0
 	DECLE "Type error",0
+	DECLE "Line too big",0
 	
 	;
 	; Read a line from the input
@@ -505,6 +514,10 @@ errors:
 	;
 bas_get_line:	PROC
 	PSHR R5
+	MVII #$3F,R0
+	CALL bas_output
+	MVII #$20,R0
+	CALL bas_output
 	MVII #basic_buffer,R4
 @@2:
 	PSHR R4
@@ -531,7 +544,9 @@ bas_get_line:	PROC
 	PULR R4
 	B @@2
 
-@@3:	MVO@ R0,R4
+@@3:	CMPI #basic_buffer_end,R4
+	BEQ @@2
+	MVO@ R0,R4
 	PSHR R4
 	CALL bas_output
 	PULR R4
@@ -766,6 +781,8 @@ bas_tokenize:	PROC
 	CMPI #$02,R0
 	BNE @@15
 	ADDI #$20,R0
+	CMPI #basic_buffer_end+1,R3
+	BEQ @@21
 	MVO@ R0,R3
 	INCR R3
 	B @@6
@@ -795,6 +812,8 @@ bas_tokenize:	PROC
 	MVI@ R2,R0
 	TSTR R0		; End of token?
 	BNE @@11
+	CMPI #basic_buffer_end+1,R3
+	BEQ @@21
 	MVO@ R5,R3	; Write token.
 	INCR R3
 	PULR R5		; Ignore restart position.
@@ -819,6 +838,8 @@ bas_tokenize:	PROC
 	BC @@18
 	SUBI #$20,R0
 @@18:
+	CMPI #basic_buffer_end+1,R3
+	BEQ @@21
 	MVO@ R0,R3
 	INCR R3
 @@16:
@@ -843,8 +864,10 @@ bas_tokenize:	PROC
 	MVO@ R2,R3
 	SUBI #basic_buffer+2,R3
 	MVO R3,basic_buffer+1	; Take note of the length
-
 @@0:	PULR PC	
+
+@@21:	MVII #ERR_TOOBIG,R0
+	CALL bas_error
 	ENDP
 
 	;
@@ -1273,10 +1296,6 @@ bas_input:	PROC
 	DECR R4
 	PSHR R4
 	PSHR R0
-	MVII #$3F,R0
-	CALL bas_output
-	MVII #$20,R0
-	CALL bas_output
 	CALL bas_get_line
 	CALL bas_expr
 	PULR R0
@@ -1291,28 +1310,12 @@ bas_input:	PROC
 
 @@7:	PSHR R4
 	PSHR R0
-	MVII #$3F,R0
-	CALL bas_output
-	MVII #$20,R0
-	CALL bas_output
 	CALL bas_get_line
 	SUBR R4,R5	; Get length of string.
-	MVI bas_strptr,R1
-	SUBR R5,R1	; Space for string.
-	DECR R1		; Space for length.
-	MVO R1,bas_strptr
-	MVO@ R5,R1
-	INCR R1
-	TSTR R5
-	BEQ @@8
-@@9:
-	MVI@ R4,R2
-	MVO@ R2,R1
-	INCR R1
-	DECR R5
-	BNE @@9
-@@8:	PULR R0
-	MVI bas_strptr,R3
+	MOVR R5,R1
+	MOVR R4,R0
+	CALL string_create
+	PULR R0
 	SUBI #$41,R0
 	MVII #strings,R5
 	ADDR R0,R5
@@ -1859,21 +1862,10 @@ bas_read:	PROC
 @@20:	DECR R4
 	PSHR R4
 @@25:	SUBR R5,R4	; Get length of string.
-	MVI bas_strptr,R1
-	SUBR R4,R1	; Space for string.
-	DECR R1		; Space for length.
-	MVO R1,bas_strptr
-	MVO@ R4,R1
-	INCR R1
-	TSTR R4
-	BEQ @@24
-@@23:
-	MVI@ R5,R2
-	MVO@ R2,R1
-	INCR R1
-	DECR R4
-	BNE @@23
-@@24:	PULR R4
+	MOVR R4,R1
+	MOVR R5,R0
+	CALL string_create
+	PULR R4
 	PULR R5
 	MVI bas_strptr,R3
 	MVO@ R3,R5
@@ -2870,7 +2862,7 @@ bas_expr7:	PROC
 	BNC @@6
 	MOVR R0,R1
 	ADDI #@@0-TOKEN_FUNC,R1
-	CMPI #@@0+10,R1
+	CMPI #@@0+13,R1
 	BC @@6
 	MVI@ R1,R7
 @@0:
@@ -2884,6 +2876,9 @@ bas_expr7:	PROC
 	DECLE @@BK
 	DECLE @@PEEK
 	DECLE @@USR
+	DECLE @@ASC
+	DECLE @@LEN
+	DECLE @@CHR
 
 @@RND:
 	PSHR R4
@@ -3055,6 +3050,45 @@ bas_expr7:	PROC
 	CLRC
 	PULR PC
 
+	; ASC(str) Get ASCII value
+@@ASC:
+	CALL bas_expr_paren
+	BNC bas_type_err
+	MVI@ R1,R0
+	TSTR R0
+	BEQ bas_type_err
+	INCR R1
+	MVI@ R1,R0
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	CLRC
+	PULR PC
+
+	; LEN(str) Get length of string
+@@LEN:
+	CALL bas_expr_paren
+	BNC bas_type_err
+	MVI@ R1,R0
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	CLRC
+	PULR PC
+
+	; CHR$(val) Create string from ASCII
+@@CHR:
+	CALL bas_expr_paren
+	BC bas_type_err
+	CALL fp2int
+	PSHR R0
+	MVII #1,R0
+	CALL string_create_simple
+	PULR R0
+	MVO@ R0,R5
+	SETC
+	PULR PC
+
 @@indirect:
 	MOVR R0,PC
 
@@ -3067,22 +3101,10 @@ bas_expr7:	PROC
 	PSHR R4
 	DECR R4
 	SUBR R5,R4	; Get length of string.
-	MVI bas_strptr,R1
-	SUBR R4,R1	; Space for string.
-	DECR R1		; Space for length.
-	MVO R1,bas_strptr
-	MVO@ R4,R1
-	INCR R1
-	TSTR R4
-	BEQ @@16
-@@15:
-	MVI@ R5,R2
-	MVO@ R2,R1
-	INCR R1
-	DECR R4
-	BNE @@15
-@@16:	PULR R4
-	MVI bas_strptr,R3
+	MOVR R4,R1
+	MOVR R5,R0
+	CALL string_create
+	PULR R4
 	SETC		; String
 	PULR PC
 
@@ -3111,22 +3133,10 @@ bas_expr7:	PROC
 	MOVR R4,R5
 	MVI@ R5,R4	; Get length
 @@18:
-	MVI bas_strptr,R1
-	SUBR R4,R1	; Space for string
-	DECR R1		; Space for length
-	MVO R1,bas_strptr
-	MVO@ R4,R1
-	INCR R1
-	TSTR R4
-	BEQ @@19
-@@20:
-	MVI@ R5,R2
-	MVO@ R2,R1
-	INCR R1
-	DECR R4
-	BNE @@20
-@@19:	PULR R4
-	MVI bas_strptr,R3
+	MOVR R4,R1
+	MOVR R5,R0
+	CALL string_create
+	PULR R4
 	SETC		; String
 	PULR PC
 
@@ -3233,6 +3243,66 @@ get_string_addr:	PROC
 	ENDP
 
 	;
+	; Create a string on the heap.
+	;
+	; Input:
+	;   R0 = Pointer to the string.
+	;   R1 = Length of the string.
+	; Output:
+	;   R3 = Pointer to the new string.
+	;
+string_create:	PROC
+	PSHR R5
+	MOVR R0,R4
+	MVI bas_strptr,R5
+	SUBR R1,R5
+	DECR R5
+	MVO R5,bas_strptr
+	MVO@ R1,R5
+	TSTR R1
+	BEQ @@2
+@@1:
+	MVI@ R4,R0
+	MVO@ R0,R5
+	DECR R1
+	BNE @@1
+@@2:
+	MVI bas_strptr,R3
+	CMP bas_last_array,R3
+	BEQ @@3
+	BNC @@3
+	PULR PC
+
+@@3:	MVII #ERR_MEMORY,R0
+	CALL bas_error
+	ENDP
+
+	;
+	; Create a simple string on the heap.
+	;
+	; Input:
+	;   R0 = Length of the string.
+	; Output:
+	;   R3 = Pointer to the new string.
+	;
+string_create_simple:	PROC
+	PSHR R5
+	MVI bas_strptr,R5
+	SUBR R0,R5
+	DECR R5
+	MVO R5,bas_strptr
+	MVO@ R0,R5
+	MVI bas_strptr,R3
+	CMP bas_last_array,R3
+	BEQ @@3
+	BNC @@3
+	PULR PC
+
+@@3:	MVII #ERR_MEMORY,R0
+	CALL bas_error
+	ENDP
+
+	;
 	; String comparison
 	; R1 = Pointer to string (left operand)
 	; R3 = Pointer to string (right operand)
@@ -3306,8 +3376,14 @@ string_concat:	PROC
 	BNE @@4
 @@3:
 	MVI bas_strptr,R3
+	CMP bas_last_array,R3
+	BEQ @@5
+	BNC @@5
 	SETC		; String
 	PULR PC
+
+@@5:	MVII #ERR_MEMORY,R0
+	CALL bas_error
 	ENDP
 
 	;
