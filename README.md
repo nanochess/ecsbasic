@@ -39,10 +39,14 @@ The following statements are supported:
     IF expr THEN line
     IF expr THEN statement
     INPUT v
+    INPUT v$
     INPUT "string";v
+    INPUT "string";v$
     PRINT expr
+    PRINT expr$
     PRINT "string"
     PRINT "string";expr
+    PRINT "string";expr$
     GOSUB line
     RETURN
     FOR v=x TO y
@@ -53,8 +57,11 @@ The following statements are supported:
     RESTORE line
     READ a
     READ a,b
+    READ a$
+    READ a$,b$
     DATA v
     DATA v,v
+    DATA "string"
     COLOR v
     SPRITE [0-7],x,y,c
     SOUND 0,[f][,v]
@@ -103,6 +110,8 @@ The following expression operators are supported:
     BK(pos)
     PEEK(addr)
     USR(addr)
+
+String support allows comparison between strings, and string concatenation. There's no support for arrays of strings.
 
 Currently, the number input only allows for 16-bit integers, that are translated to floating-point. However, the number output is able to show fractions, and exponents.
 

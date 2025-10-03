@@ -19,22 +19,37 @@
 	;                             DEFINE. Corrections for working in real hardware. Added
 	;                             keyboard debouncing. LIST allows for ranges.
 	; Revision date: Sep/28/2025. Added POKE, PEEK, and USR.
+	; Revision date: Oct/02/2025. Allows to assign, concatenate, compare, print, input, and
+	;                             read strings. 
 	;
 
+	;
+	; TODO:
+	; * If tokenizes DATA, avoid tokenizing until finding colon.
+	; * Detect crash between bas_last_array and bas_strptr.
+	; * Collapse bas_strptr.
+	;
 	ROMW 16
 	ORG $5000
 
 	CFGVAR "jlp" = 1	; Enable JLP RAM on real hardware.
 
-basic_buffer:	EQU $8040
-variables:	EQU $8080
-program_start:	EQU $80C0
+	;
+	; The area $8000-$803f is reserved because STIC mirroring.
+	;
+
+basic_buffer:	EQU $8040	; Tokenized buffer.
+variables:	EQU $8080	; A-Z
+strings:	EQU $80E8	; A$-Z$
+program_start:	EQU $8120
 memory_limit:	EQU $9F00
+
 start_for:	EQU memory_limit-64
 end_for:	EQU memory_limit
 start_gosub:	EQU memory_limit-128
 end_gosub:	EQU memory_limit-64
-bas_strings:	EQU memory_limit-192
+start_strings:	EQU memory_limit-128
+
 TOKEN_START:	EQU $0100
 TOKEN_COLON:	EQU $0100
 TOKEN_GOTO:	EQU $0108
@@ -82,6 +97,7 @@ ERR_DIM:	EQU 9
 ERR_MEMORY:	EQU 10
 ERR_ARRAY:	EQU 11
 ERR_BOUNDS:	EQU 12
+ERR_TYPE:	EQU 13
 
 KEY.LEFT    EQU     $1C     ; \   Can't be generated otherwise, so perfect
 KEY.RIGHT   EQU     $1D     ;  |_ candidates.  Could alternately send 8 for
@@ -140,7 +156,6 @@ MEMSET:
 	; Title, Intellivision EXEC will jump over it and start
 	; execution directly in _MAIN
 	;
-	; Note mark is for automatic replacement by IntyBASIC
 _TITLE:
         BYTE 125, 'ECS Extended BASIC', 0 
         
@@ -255,7 +270,7 @@ _ecs1:
 	MVII #$07,R0
 	MVO R0,bas_curcolor
 
-	CALL bas_new
+	CALL new_program
 	CALL bas_cls
 	CLRR R0
 	MVO R0,bas_curline
@@ -296,6 +311,9 @@ basic_restart:
 	CALL bas_list
     ENDI
 
+	;
+	; Main loop.
+	;
 main_loop:
 	CALL bas_save_cursor
 @@0:
@@ -344,6 +362,9 @@ main_loop:
 	CALL bas_output
 	B main_loop
 
+	;
+	; Table of statements' addresses.
+	;
 keywords_exec:
 	DECLE $0000	; Colon
 	DECLE bas_list
@@ -397,6 +418,9 @@ keywords_exec:
 	DECLE bas_syntax_error	; KEY
 	DECLE bas_bk	; BK
 
+	;
+	; BASIC keywords.
+	; 
 keywords:
 	DECLE ":",0	; $0100
 	DECLE "LIST",0
@@ -451,6 +475,9 @@ keywords:
 	DECLE "USR",0
 	DECLE 0
 
+	;
+	; Messages.
+	;
 at_line:
 	DECLE " at ",0
 errors:
@@ -467,9 +494,14 @@ errors:
 	DECLE "Out of memory",0
 	DECLE "Undefined array",0
 	DECLE "Out of bounds",0
+	DECLE "Type error",0
 	
 	;
 	; Read a line from the input
+	;
+	; Output:
+	;   R4 = Pointer to start of buffer.
+	;   R5 = Pointer after the last character.
 	;
 bas_get_line:	PROC
 	PSHR R5
@@ -505,13 +537,15 @@ bas_get_line:	PROC
 	PULR R4
 	B @@2
 
-@@1:	CLRR R0
+@@1:	PSHR R4
+	CLRR R0
 	MVO@ R0,R4
 	MVII #BAS_CR,R0
 	CALL bas_output
 	MVII #BAS_LF,R0
 	CALL bas_output
 	MVII #basic_buffer,R4
+	PULR R5
 	PULR PC
 	ENDP
 
@@ -520,6 +554,7 @@ bas_get_line:	PROC
 	; Input:
 	;   R0 = Line number.
 	; Output:
+	;   R1 = Line number (equal or higher).
 	;   R4 = Pointer to the first word of the line.
 	;
 line_search:	PROC
@@ -599,7 +634,7 @@ line_insert:	PROC
 	MVO@ R1,R4	; Write the line number.
 	MVO@ R3,R4	; Write the tokenized length.
 	MOVR R2,R5
-@@2:	MVI@ R5,R0
+@@2:	MVI@ R5,R0	; Copy the tokens.
 	MVO@ R0,R4
 	DECR R3
 	BNE @@2
@@ -617,7 +652,7 @@ get_next:	PROC
 	ENDP
 
 	;
-	; Emit a BASIC error
+	; Emit a BASIC error and stop execution.
 	;
 bas_error:	PROC
 	MVII #errors,R4
@@ -859,12 +894,32 @@ bas_execute:	PROC
 	CMPI #TOKEN_START,R0	; Token found?
 	BC @@2
 	; Try an assignment
-	CALL get_var_addr
+	CMPI #$41,R0
+	BNC @@1
+	CMPI #$5B,R0
+	BC @@1
+	MVI@ R4,R1
+	CMPI #$24,R1		; Is it string?
+	BNE @@3			; No, jump.
+	CALL get_string_addr.0
 	PSHR R5
 	CALL get_next
 	CMPI #TOKEN_EQ,R0
 	BNE @@1
 	CALL bas_expr
+	BNC @@4
+	PULR R5
+	MVO@ R3,R5
+	PULR PC
+
+@@3:	DECR R4
+	CALL get_var_addr.0
+	PSHR R5
+	CALL get_next
+	CMPI #TOKEN_EQ,R0
+	BNE @@1
+	CALL bas_expr
+	BC @@4
 	PULR R5
 	MVO@ R2,R5
 	MVO@ R3,R5
@@ -872,6 +927,10 @@ bas_execute:	PROC
 	
 @@1:
 	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+
+@@4:
+	MVII #ERR_TYPE,R0
 	CALL bas_error
 
 @@2:	MVII #keywords_exec-TOKEN_START,R3
@@ -982,20 +1041,27 @@ bas_list:	PROC
 	ENDP
 
 	;
-	; Erase the whole program
+	; Erase the whole program.
 	;
-bas_new:	PROC
-	PSHR R4
+new_program:	PROC
 	MVII #program_start,R4
 	MVO R4,program_end
 	CLRR R0
 	MVO@ R0,R4
-	PULR R4
 	MOVR R5,PC
 	ENDP
 
 	;
-	; Clear the screen
+	; Erase the whole program.
+	; Execution cannot continue.
+	;
+bas_new:	PROC
+	CALL new_program
+	B basic_restart
+	ENDP
+
+	;
+	; Clear the screen.
 	;
 bas_cls:	PROC
 	PSHR R4
@@ -1038,6 +1104,19 @@ bas_run:	PROC
 
 	MVO R0,bas_memlimit
 
+	CALL restart_pointers
+	PULR R4	
+
+@@1:
+	CALL bas_execute_line
+	B basic_restart
+	ENDP
+
+	;
+	; Restart program context.
+	;
+restart_pointers:	PROC
+	PSHR R5
 	CALL data_locate
 	MVO R0,bas_dataptr
 	
@@ -1047,10 +1126,19 @@ bas_run:	PROC
 	CLRR R0			; No arrays.
 	MVO@ R0,R3
 	MVO R3,bas_last_array
-	PULR R4	
-@@1:
-	CALL bas_execute_line
-	B basic_restart
+
+	MVII #variables,R4
+	CLRR R0
+	MVII #(26*2+26)/2,R1	; Reset variables and string variables
+@@1:	MVO@ R0,R4
+	MVO@ R0,R4
+	DECR R1
+	BNE @@1
+
+	MVII #start_strings,R4
+	MVO R4,bas_strptr
+	
+	PULR PC
 	ENDP
 
 	;
@@ -1103,11 +1191,40 @@ bas_print:	PROC
 	PULR PC
 @@4:
 	DECR R4
+	;
+	; Process expression.
+	;
 	CALL bas_expr
+	BC @@9		; Is it a string? Jump.
+	;
+	; Print number.
+	;
 	PSHR R4
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fpprint
+	PULR R4
+	B @@3
+
+	;
+	; Print string.
+	;
+@@9:	PSHR R4
+	MVI@ R3,R0
+	INCR R3
+	TSTR R0		; Is length zero?
+	BEQ @@8		; Yes, jump.
+@@7:
+	PSHR R0
+	PSHR R3
+	MVI@ R3,R0
+	CALL bas_output
+	PULR R3
+	PULR R0
+	INCR R3
+	DECR R0
+	BNE @@7
+@@8:
 	PULR R4
 	B @@3
 
@@ -1150,6 +1267,10 @@ bas_input:	PROC
 	BNC @@6
 	CMPI #$5B,R0
 	BC @@6
+	MVI@ R4,R1
+	CMPI #$24,R1	; String variable?
+	BEQ @@7
+	DECR R4
 	PSHR R4
 	PSHR R0
 	MVII #$3F,R0
@@ -1164,6 +1285,37 @@ bas_input:	PROC
 	MVII #variables,R5
 	ADDR R0,R5
 	MVO@ R2,R5
+	MVO@ R3,R5
+	PULR R4
+	PULR PC
+
+@@7:	PSHR R4
+	PSHR R0
+	MVII #$3F,R0
+	CALL bas_output
+	MVII #$20,R0
+	CALL bas_output
+	CALL bas_get_line
+	SUBR R4,R5	; Get length of string.
+	MVI bas_strptr,R1
+	SUBR R5,R1	; Space for string.
+	DECR R1		; Space for length.
+	MVO R1,bas_strptr
+	MVO@ R5,R1
+	INCR R1
+	TSTR R5
+	BEQ @@8
+@@9:
+	MVI@ R4,R2
+	MVO@ R2,R1
+	INCR R1
+	DECR R5
+	BNE @@9
+@@8:	PULR R0
+	MVI bas_strptr,R3
+	SUBI #$41,R0
+	MVII #strings,R5
+	ADDR R0,R5
 	MVO@ R3,R5
 	PULR R4
 	PULR PC
@@ -1665,13 +1817,89 @@ bas_read:	PROC
 	BNC @@2
 	CMPI #$5B,R0
 	BC @@2			; No, jump.
+	MVI@ R4,R1
+	CMPI #$24,R1	; Is it string?
+	BNE @@14	; No, jump.
+	CALL get_string_addr.0
+	PSHR R4
+	PSHR R5
+	MVI bas_dataptr,R4
+	TSTR R4
+	BEQ @@6
+@@15:	MVI@ R4,R0
+	TSTR R0		; End of line found?
+	BEQ @@16
+	CMPI #$20,R0	; Avoid spaces
+	BEQ @@15
+	CMPI #$22,R0	; Quotes?
+	BEQ @@18
+	DECR R4
+	MOVR R4,R5
+@@19:	MVI@ R4,R0
+	TSTR R0
+	BEQ @@20
+	CMPI #$2C,R0
+	BEQ @@20
+	CMPI #TOKEN_COLON,R0
+	BEQ @@20
+	B @@19
+
+@@18:	MOVR R4,R5
+@@22:	MVI@ R4,R0
+	CMPI #$22,R0
+	BEQ @@21
+	TSTR R0
+	BNE @@22
+	B @@20
+
+@@21:	PSHR R4
+	DECR R4
+	B @@25
+
+@@20:	DECR R4
+	PSHR R4
+@@25:	SUBR R5,R4	; Get length of string.
+	MVI bas_strptr,R1
+	SUBR R4,R1	; Space for string.
+	DECR R1		; Space for length.
+	MVO R1,bas_strptr
+	MVO@ R4,R1
+	INCR R1
+	TSTR R4
+	BEQ @@24
+@@23:
+	MVI@ R5,R2
+	MVO@ R2,R1
+	INCR R1
+	DECR R4
+	BNE @@23
+@@24:	PULR R4
+	PULR R5
+	MVI bas_strptr,R3
+	MVO@ R3,R5
+	B @@11
+
+	; End of line.
+@@16:	MVI@ R4,R0
+	TSTR R0		; End of program?
+	BEQ @@6
+	INCR R4
+@@17:	MVI@ R4,R0
+	TSTR R0
+	BEQ @@16
+	CMPI #TOKEN_DATA,R0
+	BNE @@17
+	B @@15
+
+
+@@14:	DECR R4
 	CALL get_var_addr.0
 	PSHR R4
 	PSHR R5
 	MVI bas_dataptr,R4
 	TSTR R4
 	BEQ @@6
-@@8	MVI@ R4,R0
+@@8:	MVI@ R4,R0
 	TSTR R0		; End of line found?
 	BEQ @@5
 	CMPI #$20,R0	; Avoid spaces
@@ -2210,11 +2438,20 @@ bas_expr_int:	PROC
 	ENDP
 
 	;
+	; Type error
+	;
+bas_type_err:	PROC
+	MVII #ERR_TYPE,R0
+	CALL bas_error
+	ENDP
+
+	;
 	; Expression evaluation
 	;
 bas_expr:	PROC
 	PSHR R5
 	CALL bas_expr1
+	BC @@0		; Jump if string.
 	CALL get_next
 	CMPI #TOKEN_OR,R0
 	BNE @@1
@@ -2223,6 +2460,7 @@ bas_expr:	PROC
 	CALL fp2int
 	PSHR R0
 	CALL bas_expr1
+	BC bas_type_err
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
@@ -2234,15 +2472,17 @@ bas_expr:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 
 @@1:	DECR R4
-	PULR PC
+@@0:	PULR PC
 	ENDP
 
 bas_expr1:	PROC
 	PSHR R5
 	CALL bas_expr2
+	BC @@0		; Jump if string.
 	CALL get_next
 	CMPI #TOKEN_XOR,R0
 	BNE @@1
@@ -2251,6 +2491,7 @@ bas_expr1:	PROC
 	CALL fp2int
 	PSHR R0
 	CALL bas_expr2
+	BC bas_type_err
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
@@ -2259,15 +2500,17 @@ bas_expr1:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 
 @@1:	DECR R4
-	PULR PC
+@@0:	PULR PC
 	ENDP
 
 bas_expr2:	PROC
 	PSHR R5
 	CALL bas_expr3
+	BC @@0		; Jump if string.
 	CALL get_next
 	CMPI #TOKEN_AND,R0
 	BNE @@1
@@ -2276,6 +2519,7 @@ bas_expr2:	PROC
 	CALL fp2int
 	PSHR R0
 	CALL bas_expr3
+	BC bas_type_err
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
@@ -2284,15 +2528,17 @@ bas_expr2:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 
 @@1:	DECR R4
-	PULR PC
+@@0:	PULR PC
 	ENDP
 
 bas_expr3:	PROC
 	PSHR R5
 	CALL bas_expr4
+	BC @@7
 	CALL get_next
 	CMPI #TOKEN_LE,R0
 	BNC @@1
@@ -2303,6 +2549,7 @@ bas_expr3:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr4
+	BC bas_type_err
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -2318,6 +2565,7 @@ bas_expr3:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr4
+	BC bas_type_err
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -2332,6 +2580,7 @@ bas_expr3:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr4
+	BC bas_type_err
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -2346,6 +2595,7 @@ bas_expr3:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr4
+	BC bas_type_err
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -2360,6 +2610,7 @@ bas_expr3:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr4
+	BC bas_type_err
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -2372,6 +2623,7 @@ bas_expr3:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr4
+	BC bas_type_err
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -2381,15 +2633,76 @@ bas_expr3:	PROC
 	BNC @@false
 	B @@true
 
-@@1:	DECR R4
+@@1:	CLRC
+	DECR R4
+	PULR PC
+
+	;
+	; String comparison
+	;
+@@7:
+	CALL get_next
+	CMPI #TOKEN_LE,R0
+	BNC @@0
+	CMPI #TOKEN_GT+1,R0
+	BC @@0
+	PSHR R0
+	PSHR R2
+	PSHR R3
+	CALL bas_expr4
+	BNC bas_type_err
+	PULR R1
+	PULR R0
+	PSHR R4
+	CALL string_comparison
+	PULR R4
+	PULR R1
+	CMPI #TOKEN_LT,R1
+	BEQ @@8
+	CMPI #TOKEN_GT,R1
+	BEQ @@9
+	CMPI #TOKEN_LE,R1
+	BEQ @@10
+	CMPI #TOKEN_GE,R1
+	BEQ @@11
+	CMPI #TOKEN_EQ,R1
+	BEQ @@12
+	TSTR R0
+	BEQ @@false
+	B @@true
+
+@@12:	TSTR R0
+	BEQ @@true
+	B @@false
+
+@@11:	TSTR R0
+	BPL @@true
+	B @@false
+
+@@10:	CMPI #1,R0
+	BEQ @@false
+	B @@true
+
+@@9:	CMPI #1,R0
+	BEQ @@true
+	B @@false
+
+@@8:	TSTR R0
+	BPL @@false
+	B @@true
+
+@@0:	SETC
+	DECR R4
 	PULR PC
 
 @@true:	CLRR R2
 	MVII #$00BF,R3
+	CLRC
 	PULR PC
 
 @@false:	CLRR R2
 	CLRR R3
+	CLRC
 	PULR PC
 
 	ENDP
@@ -2397,6 +2710,7 @@ bas_expr3:	PROC
 bas_expr4:	PROC
 	PSHR R5
 	CALL bas_expr5
+	BC @@3
 @@0:
 	CALL get_next
 	CMPI #$2b,R0
@@ -2404,6 +2718,7 @@ bas_expr4:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr5
+	BC bas_type_err
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -2419,6 +2734,7 @@ bas_expr4:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr5
+	BC bas_type_err
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -2429,12 +2745,32 @@ bas_expr4:	PROC
 	B @@0
 
 @@2:	DECR R4
+	CLRC
+	PULR PC
+
+@@3:	CALL get_next
+	CMPI #$2b,R0
+	BNE @@4
+	PSHR R2
+	PSHR R3
+	CALL bas_expr5
+	BNC bas_type_err
+	PULR R1
+	PULR R0
+	PSHR R4
+	CALL string_concat
+	PULR R4
+	B @@3
+
+@@4:	DECR R4
+	SETC
 	PULR PC
 	ENDP
 
 bas_expr5:	PROC
 	PSHR R5
 	CALL bas_expr6
+	BC @@3
 @@0:
 	CALL get_next
 	CMPI #$2a,R0
@@ -2442,6 +2778,7 @@ bas_expr5:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr6
+	BC bas_type_err
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -2457,6 +2794,7 @@ bas_expr5:	PROC
 	PSHR R2
 	PSHR R3
 	CALL bas_expr6
+	BC bas_type_err
 	PULR R1
 	PULR R0
 	PSHR R4
@@ -2467,7 +2805,8 @@ bas_expr5:	PROC
 	B @@0
 
 @@2:	DECR R4
-	PULR PC
+	CLRC
+@@3:	PULR PC
 	ENDP
 
 bas_expr6:	PROC
@@ -2476,16 +2815,19 @@ bas_expr6:	PROC
 	CMPI #$2D,R0	; Minus?
 	BNE @@1
 	CALL bas_expr7
+	BC bas_type_err
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fpneg
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 	
 @@1:	CMPI #TOKEN_NOT,R0	; NOT?
 	BNE @@2
 	CALL bas_expr7
+	BC bas_type_err
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
@@ -2493,6 +2835,7 @@ bas_expr6:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 
 @@2:	DECR R4
@@ -2506,9 +2849,11 @@ bas_expr_paren:	PROC
 	CMPI #$28,R0
 	BNE @@1
 	CALL bas_expr
+	GSWD R1		; Save carry flag.
 	CALL get_next
 	CMPI #$29,R0
 	BNE @@1
+	RSWD R1
 	MOVR R2,R0
 	MOVR R3,R1
 	PULR PC
@@ -2546,28 +2891,36 @@ bas_expr7:	PROC
 	PULR R4
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 @@INT:
 	CALL bas_expr_paren
+	BC bas_type_err
 	CALL fpint
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 @@SGN:
 	CALL bas_expr_paren
+	BC bas_type_err
 	CALL fpsgn
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 @@ABS:
 	CALL bas_expr_paren
+	BC bas_type_err
 	CALL fpabs
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 
 @@STICK:
 	CALL bas_expr_paren
+	BC bas_type_err
 	CALL fp2int
 	CMPI #2,R0
 	BC @@3
@@ -2592,6 +2945,7 @@ bas_expr7:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 
 @@TABLE:
@@ -2602,6 +2956,7 @@ bas_expr7:	PROC
 
 @@STRIG:
 	CALL bas_expr_paren
+	BC bas_type_err
 	CALL fp2int
 	CMPI #2,R0
 	BC @@3
@@ -2626,9 +2981,11 @@ bas_expr7:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 @@KEY:
 	CALL bas_expr_paren
+	BC bas_type_err
 	CALL fp2int
 	CMPI #2,R0
 	BC @@3
@@ -2651,6 +3008,7 @@ bas_expr7:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 
 @@KEYS:
@@ -2659,6 +3017,7 @@ bas_expr7:	PROC
 	; BK(v) Read screen
 @@BK:
 	CALL bas_expr_paren
+	BC bas_type_err
 	CALL fp2int
 	CMPI #240,R0
 	BC @@3
@@ -2668,48 +3027,114 @@ bas_expr7:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 
 	; PEEK(v) Read memory
 @@PEEK:
 	CALL bas_expr_paren
+	BC bas_type_err
 	CALL fp2int
 	MOVR R0,R1
 	MVI@ R1,R0
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 
 	; USR(v) Call and receive value
 @@USR:
 	CALL bas_expr_paren
+	BC bas_type_err
 	CALL fp2int
 	CALL @@indirect
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 
 @@indirect:
 	MOVR R0,PC
 
-@@6:
-	CMPI #$28,R0	; Parenthesis?
+@@6:	CMPI #$22,R0	; Quote?
+	BNE @@12
+	MOVR R4,R5	; Start of string.
+@@14:	MVI@ R4,R0
+	CMPI #$22,R0	; Locate end of string.
+	BNE @@14
+	PSHR R4
+	DECR R4
+	SUBR R5,R4	; Get length of string.
+	MVI bas_strptr,R1
+	SUBR R4,R1	; Space for string.
+	DECR R1		; Space for length.
+	MVO R1,bas_strptr
+	MVO@ R4,R1
+	INCR R1
+	TSTR R4
+	BEQ @@16
+@@15:
+	MVI@ R5,R2
+	MVO@ R2,R1
+	INCR R1
+	DECR R4
+	BNE @@15
+@@16:	PULR R4
+	MVI bas_strptr,R3
+	SETC		; String
+	PULR PC
+
+@@12:	CMPI #$28,R0	; Parenthesis?
 	BNE @@5
 	CALL bas_expr
+	GSWD R1
 	CALL get_next
 	CMPI #$29,R0
 	BNE @@2
+	RSWD R1
 	PULR PC
 @@5:	
 	CMPI #$41,R0	; A-Z?
 	BNC @@1
 	CMPI #$5B,R0
 	BC @@1
+	MVI@ R4,R1
+	CMPI #$24,R1	; $
+	BNE @@17
+	CALL get_string_addr.0
+	PSHR R4
+	MVI@ R5,R4	; Get string
+	TSTR R4
+	BEQ @@18
+	MOVR R4,R5
+	MVI@ R5,R4	; Get length
+@@18:
+	MVI bas_strptr,R1
+	SUBR R4,R1	; Space for string
+	DECR R1		; Space for length
+	MVO R1,bas_strptr
+	MVO@ R4,R1
+	INCR R1
+	TSTR R4
+	BEQ @@19
+@@20:
+	MVI@ R5,R2
+	MVO@ R2,R1
+	INCR R1
+	DECR R4
+	BNE @@20
+@@19:	PULR R4
+	MVI bas_strptr,R3
+	SETC		; String
+	PULR PC
+
+@@17:	DECR R4
 	CALL get_var_addr.0
 	MVI@ R5,R2
 	MVI@ R5,R3
+	CLRC
 	PULR PC
 
 @@1:	CMPI #$2E,R0
@@ -2722,6 +3147,7 @@ bas_expr7:	PROC
 	CALL parse_number
 	MOVR R0,R2
 	MOVR R1,R3
+	CLRC
 	PULR PC
 
 @@2:	MVII #ERR_SYNTAX,R0
@@ -2788,6 +3214,99 @@ parse_number:	PROC
 	CALL fpneg
 @@5:
 	PULR R4
+	PULR PC
+	ENDP
+
+	;
+	; Get string address.
+	; Input:
+	;   R0 = String letter (A-Z)
+	; Output:
+	;   R5 = Pointer.
+	;
+get_string_addr:	PROC
+@@0:	PSHR R5
+	SUBI #$41,R0
+	MVII #strings,R5
+	ADDR R0,R5
+	PULR PC
+	ENDP
+
+	;
+	; String comparison
+	; R1 = Pointer to string (left operand)
+	; R3 = Pointer to string (right operand)
+	;
+string_comparison:	PROC
+	MVI@ R1,R0	; Read length 1
+	INCR R1
+	MVI@ R3,R2	; Read length 2
+	INCR R3
+@@1:	TSTR R0
+	BEQ @@2
+	TSTR R2
+	BEQ @@5
+	MVI@ R1,R4
+	CMP@ R3,R4
+	BEQ @@6
+	BNC @@3
+@@5:	MVII #1,R0	; >
+	MOVR R5,PC
+
+@@6:	INCR R1
+	INCR R3
+	DECR R0
+	DECR R2
+	B @@1
+
+@@2:	TSTR R2
+	BEQ @@4
+
+@@3:	MVII #$FFFF,R0	; <
+	MOVR R5,PC
+
+@@4:	CLRR R0		; =
+	MOVR R5,PC
+	ENDP
+
+	;
+	; String concatenation.
+	; R1 = Pointer to string (left operand)
+	; R3 = Pointer to string (right operand)
+	;
+string_concat:	PROC
+	PSHR R5
+	MVI@ R1,R0	; Read length 1
+	INCR R1
+	MVI@ R3,R2	; Read length 2
+	INCR R3
+	MOVR R0,R4
+	ADDR R2,R4
+	MVI bas_strptr,R5
+	SUBR R4,R5	; Space for string
+	DECR R5		; Space for length
+	MVO R5,bas_strptr
+	MVO@ R4,R5
+	TSTR R0
+	BEQ @@1
+@@2:
+	MVI@ R1,R4
+	MVO@ R4,R5
+	INCR R1
+	DECR R0
+	BNE @@2
+@@1:
+	TSTR R2
+	BEQ @@3
+@@4:
+	MVI@ R3,R4
+	MVO@ R4,R5
+	INCR R3
+	DECR R2
+	BNE @@4
+@@3:
+	MVI bas_strptr,R3
+	SETC		; String
 	PULR PC
 	ENDP
 
@@ -3292,6 +3811,7 @@ bas_gosubptr:	RMB 1	; Stack for GOSUB/RETURN.
 bas_dataptr:	RMB 1	; Pointer for DATA.
 bas_arrays:	RMB 1	; Pointer to where arrays start.
 bas_last_array:	RMB 1	; Pointer to end of array list.
+bas_strptr:	RMB 1	; Pointer to space for strings.
 bas_memlimit:	RMB 1	; Mmemory limit.
 bas_listst:	RMB 1	; Start of LIST.
 bas_listen:	RMB 1	; End of LIST.
