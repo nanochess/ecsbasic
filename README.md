@@ -80,6 +80,8 @@ The following statements are supported:
     BORDER color
     DEFINE card,"hex.drawing"
     POKE addr,v
+    ON expr GOTO line1,line2,line3
+    ON expr GOSUB line1,line2,line3
 
 Statements can be concatenated on a single line using the colon as a separator.
 
@@ -131,6 +133,8 @@ String support allows comparison between strings, string concatenation, and asso
 Currently, the number input only allows for 16-bit integers, that are translated to floating-point. However, the number output is able to show fractions, and exponents.
 
 If you get an error, you can do debugging of the program by using PRINT to see the variables, and using GOTO to re-enter a program. RUN resets all variables.
+
+Given the slow speed of the CP1610 processor, my interpreter doesn't allow expressions for the target line of GOTO and GOSUB statements.
 
 ![image](shot0004.gif)
 

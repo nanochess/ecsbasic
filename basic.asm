@@ -25,6 +25,7 @@
 	; Revision date: Oct/03/2025. Added ASC, LEN, CHR$, LEFT$, MID$, RIGHT$, INKEY$, VAL,
 	;                             STR$, and INSTR. Detects if new program line exceeds
 	;                             available memory. Added garbage collector for strings.
+	; Revision date: Oct/04/2025. Added ON GOTO and ON GOSUB.
 	;
 
 	;
@@ -58,6 +59,9 @@ program_limit:	EQU memory_limit-256
 
 STRING_TRASH:	EQU $CAFE
 
+	;
+	; Token definitions needed for comparisons inside the interpreter.
+	;
 TOKEN_START:	EQU $0100
 TOKEN_COLON:	EQU $0100
 TOKEN_GOTO:	EQU $0108
@@ -66,32 +70,27 @@ TOKEN_THEN:	EQU $010a
 TOKEN_ELSE:	EQU $010b
 TOKEN_TO:	EQU $010d
 TOKEN_STEP:	EQU $010e
+TOKEN_GOSUB:	EQU $0110
 
 TOKEN_DATA:	EQU $0115
 
-TOKEN_AND:	EQU $011f
-TOKEN_NOT:	EQU $0120
-TOKEN_OR:	EQU $0121
-TOKEN_XOR:	EQU $0122
+TOKEN_AND:	EQU $0120
+TOKEN_NOT:	EQU $0121
+TOKEN_OR:	EQU $0122
+TOKEN_XOR:	EQU $0123
 
-TOKEN_LE:	EQU $0123
-TOKEN_GE:	EQU $0124
-TOKEN_NE:	EQU $0125
-TOKEN_EQ:	EQU $0126
-TOKEN_LT:	EQU $0127
-TOKEN_GT:	EQU $0128
+TOKEN_LE:	EQU $0124
+TOKEN_GE:	EQU $0125
+TOKEN_NE:	EQU $0126
+TOKEN_EQ:	EQU $0127
+TOKEN_LT:	EQU $0128
+TOKEN_GT:	EQU $0129
 
-TOKEN_FUNC:	EQU $0129
-TOKEN_INT:	EQU $0129
-TOKEN_ABS:	EQU $012a
-TOKEN_SGN:	EQU $012b
-TOKEN_RND:	EQU $012c
-TOKEN_STICK:	EQU $012d
-TOKEN_STRIG:	EQU $012e
-TOKEN_KEY:	EQU $012f
-TOKEN_BK:	EQU $0130
-TOKEN_PEEK:	EQU $0131
+TOKEN_FUNC:	EQU $012a
 
+	;
+	; Error numbers.
+	;
 ERR_TITLE:	EQU 0
 ERR_SYNTAX:	EQU 1
 ERR_STOP:	EQU 2
@@ -414,6 +413,7 @@ keywords_exec:
 	DECLE bas_sound	
 	DECLE bas_border
 	DECLE bas_poke
+	DECLE bas_on
 
 	; Operators and BASIC functions cannot be executed directly
 	DECLE bas_syntax_error	; AND
@@ -481,17 +481,18 @@ keywords:
 	DECLE "SOUND",0	; $011C
 	DECLE "BORDER",0
 	DECLE "POKE",0	
-	DECLE "AND",0	; $011F
+	DECLE "ON",0
+	DECLE "AND",0	; $0120
 	DECLE "NOT",0
 	DECLE "OR",0
 	DECLE "XOR",0
-	DECLE "<=",0	; $0123
+	DECLE "<=",0	; $0124
 	DECLE ">=",0
 	DECLE "<>",0
 	DECLE "=",0
 	DECLE "<",0
 	DECLE ">",0
-	DECLE "INT",0
+	DECLE "INT",0	; $012a
 	DECLE "ABS",0
 	DECLE "SGN",0
 	DECLE "RND",0
@@ -1375,13 +1376,13 @@ bas_input:	PROC
 	;
 bas_goto:	PROC
 	PSHR R5
-	; !!! Change for expression evaluation
 	CALL get_next
 	CMPI #$30,R0
-	BNC @@1
+	BNC @@0
 	CMPI #$3A,R0
-	BC @@1
+	BC @@0
 	CALL parse_integer
+@@1:	; Entry point for ON GOTO
 	CALL line_search
 	CMPR R1,R0
 	BEQ @@3
@@ -1399,7 +1400,7 @@ bas_goto:	PROC
 	MVII #STACK,R6
 	B bas_run.1
 
-@@1:	MVII #ERR_SYNTAX,R0
+@@0:	MVII #ERR_SYNTAX,R0
 	CALL bas_error
 	ENDP
 
@@ -1714,13 +1715,13 @@ bas_next:	PROC
 	;
 bas_gosub:	PROC
 	PSHR R5
-	; !!! Change for expression evaluation
 	CALL get_next
 	CMPI #$30,R0
-	BNC @@1
+	BNC @@0
 	CMPI #$3A,R0
-	BC @@1
+	BC @@0
 	CALL parse_integer
+@@1:	; Entry point for ON GOSUB
 	CALL get_next_point
 	MVI bas_gosubptr,R5
 	CMPI #end_gosub-2,R5
@@ -1750,7 +1751,7 @@ bas_gosub:	PROC
 @@5:	MVII #ERR_GOSUB,R0
 	CALL bas_error
 
-@@1:	MVII #ERR_SYNTAX,R0
+@@0:	MVII #ERR_SYNTAX,R0
 	CALL bas_error
 
 	ENDP
@@ -2426,6 +2427,67 @@ bas_poke:	PROC
 	ENDP
 
 	;
+	; ON
+	;
+bas_on:	PROC
+	PSHR R5
+	CALL bas_expr_int
+	PSHR R0
+	CALL get_next
+	CMPI #TOKEN_GOTO,R0
+	BEQ @@1
+	CMPI #TOKEN_GOSUB,R0
+	BEQ @@1
+
+@@6:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+
+@@1:	PULR R1
+	PSHR R0
+	;
+	; First option is 1.
+	;
+@@3:	DECR R1
+	BEQ @@2
+@@5:
+	CALL get_next
+	CMPI #$2C,R0
+	BEQ @@3
+	TSTR R0		; Reached end of line?
+	BEQ @@4
+	CMPI #TOKEN_COLON,R0
+	BEQ @@4
+	CMPI #TOKEN_ELSE,R0
+	BEQ @@4
+	B @@5
+
+@@2:	CALL get_next
+	CMPI #$30,R0
+	BNC @@6
+	CMPI #$3A,R0
+	BC @@6
+	CALL parse_integer	; Get the target line number.
+	PULR R1
+	CMPI #TOKEN_GOSUB,R1
+	BNE bas_goto.1
+	PSHR R0
+@@7:	CALL get_next		; Jump over the remaining line data.
+	TSTR R0
+	BEQ @@8
+	CMPI #TOKEN_COLON,R0
+	BEQ @@8
+	CMPI #TOKEN_ELSE,R0
+	BNE @@7
+@@8:	DECR R4
+	PULR R0
+	B bas_gosub.1
+
+@@4:	PULR R0
+	DECR R4
+	PULR PC
+	ENDP
+
+	;
 	; BK(v) = v
 	;
 bas_bk:	PROC
@@ -2905,10 +2967,10 @@ bas_expr7:	PROC
 	
 	CMPI #TOKEN_FUNC,R0
 	BNC @@6
-	MOVR R0,R1
-	ADDI #@@0-TOKEN_FUNC,R1
-	CMPI #@@0+20,R1
-	BC @@6
+	CMPI #TOKEN_FUNC+20,R0
+	BC @@2		; Syntax error.
+	MVII #@@0-TOKEN_FUNC,R1
+	ADDR R0,R1
 	MVI@ R1,R7
 @@0:
 	DECLE @@INT
