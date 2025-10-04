@@ -22,7 +22,8 @@
 	; Revision date: Oct/02/2025. Allows to assign, concatenate, compare, print, input, and
 	;                             read strings. Added limit detection to bas_get_line.
 	;                             Added limit detection to the tokenizer.
-	; Revision date: Oct/03/2025. Added ASC, LEN, and CHR$.
+	; Revision date: Oct/03/2025. Added ASC, LEN, CHR$, LEFT$, MID$, RIGHT$, INKEY$, VAL,
+	;                             STR$, and INSTR.
 	;
 
 	;
@@ -499,6 +500,7 @@ keywords:
 	DECLE "VAL",0
 	DECLE "INKEY$",0
 	DECLE "STR$",0
+	DECLE "INSTR",0
 	DECLE 0
 
 	;
@@ -2887,7 +2889,7 @@ bas_expr7:	PROC
 	BNC @@6
 	MOVR R0,R1
 	ADDI #@@0-TOKEN_FUNC,R1
-	CMPI #@@0+19,R1
+	CMPI #@@0+20,R1
 	BC @@6
 	MVI@ R1,R7
 @@0:
@@ -2914,6 +2916,7 @@ bas_expr7:	PROC
 	DECLE @@VAL
 	DECLE @@INKEY
 	DECLE @@STR
+	DECLE @@INSTR
 
 @@RND:
 	PSHR R4
@@ -3284,7 +3287,7 @@ bas_expr7:	PROC
 	SETC
 	PULR PC
 
-	; STR
+	; STR$
 @@STR:	CALL bas_expr_paren
 	BC bas_type_err
 	PSHR R4
@@ -3307,6 +3310,84 @@ bas_expr7:	PROC
 	ADDI #basic_buffer-1,R1
 	MVO@ R0,R1
 	MOVR R5,PC
+
+	; INSTR
+@@INSTR:
+	CALL get_next
+	CMPI #$28,R0
+	BNE @@2
+	CALL bas_expr
+	BC bas_type_err
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PSHR R0
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@2
+	CALL bas_expr
+	BNC bas_type_err
+	PSHR R3
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@2
+	CALL bas_expr
+	BNC bas_type_err
+	CALL get_next
+	CMPI #$29,R0
+	BNE @@2
+	PULR R2
+	PULR R0
+	PSHR R4
+	; Limit search pointer.
+	DECR R0
+	BPL @@28
+	CLRR R0
+@@28:	CMP@ R2,R0
+	BLT @@29
+	MVI@ R2,R0
+@@29:	CMP@ R2,R0	; Position equal to string length?
+	BGE @@31	; Yes, stop.
+	MOVR R0,R1	; Position...
+	ADD@ R3,R1	; ...plus comparison string length...
+	CMP@ R2,R1	; ...exceeds string length?
+	BGT @@31	; Yes, stop.
+	CALL @@string_comparison_portion
+	BC @@30
+	INCR R0
+	B @@29
+	
+@@string_comparison_portion:
+	PSHR R5
+	PSHR R0
+	MOVR R2,R4
+	INCR R4
+	ADDR R0,R4
+	MOVR R3,R5
+	MVI@ R5,R1
+	TSTR R1
+	BEQ @@32
+@@33:	MVI@ R4,R0
+	CMP@ R5,R0
+	BNE @@34
+	DECR R1
+	BNE @@33
+@@32:	SETC
+	PULR R0
+	PULR PC
+
+@@34:	CLRC
+	PULR R0
+	PULR PC
+
+@@31:	MVII #$FFFF,R0
+@@30:	INCR R0
+	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	CLRC
+	PULR PC
 
 @@indirect:
 	MOVR R0,PC

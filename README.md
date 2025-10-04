@@ -120,6 +120,7 @@ The following expression operators are supported:
     VAL(str)
     STR$(expr)
     INKEY$
+    INSTR(pos,str1,str2)
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings.
 
