@@ -23,13 +23,13 @@
 	;                             read strings. Added limit detection to bas_get_line.
 	;                             Added limit detection to the tokenizer.
 	; Revision date: Oct/03/2025. Added ASC, LEN, CHR$, LEFT$, MID$, RIGHT$, INKEY$, VAL,
-	;                             STR$, and INSTR.
+	;                             STR$, and INSTR. Detects if new program line exceeds
+	;                             available memory. Added garbage collector for strings.
 	;
 
 	;
 	; TODO:
 	; * Maybe if tokenizes DATA, avoid tokenizing until finding colon.
-	; * Collapse bas_strptr.
 	; * Add TIMER to access current video frame number.
 	;
 
@@ -54,6 +54,9 @@ end_for:	EQU memory_limit
 start_gosub:	EQU memory_limit-128
 end_gosub:	EQU memory_limit-64
 start_strings:	EQU memory_limit-128
+program_limit:	EQU memory_limit-256
+
+STRING_TRASH:	EQU $CAFE
 
 TOKEN_START:	EQU $0100
 TOKEN_COLON:	EQU $0100
@@ -264,12 +267,19 @@ _ecs1:
 	CALL _set_isr
 	DECLE _int_vector
 
+	;
+	; Init primary and secondary sound chips.
+	;
 	CLRR R0
 	MVO R0,$01fb
+	MVO R0,$00fb
 	MVO R0,$01fc
+	MVO R0,$00fc
 	MVO R0,$01fd
+	MVO R0,$00fd
 	MVII #$38,R0
 	MVO R0,$01f8
+	MVO R0,$00f8
 
 	MVII #1,R0
 	MVO R0,_border_color
@@ -650,6 +660,8 @@ line_insert:	PROC
 	MOVR R5,R4	; Copy source pointer to target pointer.
 	ADDR R3,R4
 	ADDI #2,R4	; Account for line and length words.
+	CMPI #program_limit,R4
+	BC @@3
 	MVO R4,program_end
 	PSHR R1
 	MOVR R5,R1
@@ -674,6 +686,9 @@ line_insert:	PROC
 	DECR R3
 	BNE @@2
 	PULR PC
+
+@@3:	MVII #ERR_MEMORY,R0
+	CALL bas_error
 	ENDP
 
 	;
@@ -930,6 +945,8 @@ bas_execute_line:	PROC
 	;
 bas_execute:	PROC
 	PSHR R5
+	MVI bas_strbase,R0
+	MVO R0,bas_strptr	; Reset strings stack.
 @@0:
 	MVI@ R4,R0
 	CMPI #32,R0
@@ -951,8 +968,10 @@ bas_execute:	PROC
 	BNE @@1
 	CALL bas_expr
 	BNC @@4
-	PULR R5
-	MVO@ R3,R5
+	PULR R1
+	PSHR R4
+	CALL string_assign
+	PULR R4
 	PULR PC
 
 @@3:	DECR R4
@@ -1147,8 +1166,6 @@ bas_run:	PROC
 	MVII #start_gosub,R0
 	MVO R0,bas_gosubptr
 
-	MVO R0,bas_memlimit
-
 	CALL restart_pointers
 	PULR R4	
 
@@ -1181,7 +1198,7 @@ restart_pointers:	PROC
 	BNE @@1
 
 	MVII #start_strings,R4
-	MVO R4,bas_strptr
+	MVO R4,bas_strbase
 	
 	PULR PC
 	ENDP
@@ -2040,7 +2057,7 @@ bas_dim:	PROC
 	ADDI #3,R0
 	ADDR R1,R0
 	ADDR R1,R0
-	CMP bas_memlimit,R0
+	CMP bas_strptr,R0
 	BC @@3
 	MVO@ R2,R3
 	INCR R3
@@ -3687,6 +3704,90 @@ string_concat:	PROC
 	ENDP
 
 	;
+	; String assign.
+	; R1 = Pointer to string variable.
+	; R3 = New string.
+	;
+string_assign:	PROC
+	PSHR R5
+	MVII #STRING_TRASH,R4
+
+	;
+	; Erase the used space of the stack.
+	;
+	MOVR R3,R2
+	MVI@ R2,R0
+	INCR R2
+	ADDR R0,R2
+	MVI bas_strbase,R0
+	CMPR R0,R2
+	BC @@3
+@@4:	MVO@ R4,R2
+	INCR R2
+	CMPR R0,R2
+	BNC @@4
+@@3:
+	;
+	; Erase the old string.
+	;
+	MVI@ R1,R2
+	TSTR R2
+	BEQ @@1
+	MVI@ R2,R0
+	MVO@ R4,R2
+	INCR R2
+	TSTR R0
+	BEQ @@1
+@@2:	MVO@ R4,R2
+	INCR R2
+	DECR R0
+	BNE @@2
+	;
+	; Search for space at higher-addresses.
+	;
+@@1:	MVII #start_strings-1,R2
+	CMP bas_strbase,R2	; All examined?
+	BNC @@6			; Yes, jump.
+@@5:	CMP@ R2,R4		; Space found?
+	BNE @@7			; No, keep searching.
+	CLRR R5
+@@8:
+	INCR R5
+	DECR R2
+	CMP bas_strbase,R2
+	BNC @@9
+	CMP@ R2,R4
+	BEQ @@8
+@@9:	INCR R2
+	MVI@ R3,R0
+	INCR R0
+	CMPR R0,R5		; The string fits?
+	BNC @@7
+	;
+	; The string fits in previous space.
+	;
+	MOVR R3,R4
+	MOVR R2,R5
+	MVO@ R2,R1		; New address.
+@@10:	MVI@ R4,R2
+	MVO@ R2,R5
+	DECR R0
+	BNE @@10
+	PULR PC
+
+@@7:	DECR R2
+	CMP bas_strbase,R2
+	BC @@5
+
+	;
+	; No space available.
+	;
+@@6:	MVO R3,bas_strbase	; Grow space for string variables.
+	MVO@ R3,R1
+	PULR PC
+	ENDP
+
+	;
 	; Save content under the cursor.
 	;
 bas_save_cursor:	PROC
@@ -3732,6 +3833,8 @@ bas_restore_cursor:	PROC
 	;
 bas_output:	PROC
 	PSHR R5
+	CMPI #$0100,R0	; Characters 256-511
+	BC @@18
 	CMPI #$20,R0
 	BC @@0
 	CMPI #BAS_CR,R0
@@ -3751,7 +3854,8 @@ bas_output:	PROC
 	; Normal letter
 	;
 	SUBI #$20,R0
-	ANDI #$FF,R0	
+	ANDI #$FF,R0
+@@18:
 	SLL R0,2	; Convert character to card number.
 	SLL R0,1
 	ADD bas_curcolor,R0
@@ -4148,10 +4252,15 @@ _int_vector:     PROC
 	MVO R0,_gram_bitmap
 @@vi1:
 
-	; Increase frame number
+	; Increase frame number (32 bits)
 	MVI _frame,R0
 	INCR R0
 	MVO R0,_frame
+	BNE @@3
+	MVI _frame+1,R0
+	INCR R0
+	MVO R0,_frame+1
+@@3:
 
 	; Adjust random number generator
 	MVI lfsr,R0
@@ -4166,17 +4275,17 @@ _int_vector:     PROC
 	INCLUDE "fplib.asm"
 	INCLUDE "fpio.asm"
 
-	ORG $319,$319,"-RWB"
-_frame:	 RMB 1   ; Current frame
-_col0:      RMB 1       ; Collision status for MOB0
-_col1:      RMB 1       ; Collision status for MOB1
-_col2:      RMB 1       ; Collision status for MOB2
-_col3:      RMB 1       ; Collision status for MOB3
-_col4:      RMB 1       ; Collision status for MOB4
-_col5:      RMB 1       ; Collision status for MOB5
-_col6:      RMB 1       ; Collision status for MOB6
-_col7:      RMB 1       ; Collision status for MOB7
-_mobs:	RMB 24
+	ORG $320,$320,"-RWB"
+_frame:		RMB 2   ; Current frame number.
+_col0:		RMB 1	; Collision status for MOB0
+_col1:		RMB 1	; Collision status for MOB1
+_col2:		RMB 1	; Collision status for MOB2
+_col3:		RMB 1	; Collision status for MOB3
+_col4:		RMB 1	; Collision status for MOB4
+_col5:		RMB 1	; Collision status for MOB5
+_col6:		RMB 1	; Collision status for MOB6
+_col7:		RMB 1	; Collision status for MOB7
+_mobs:		RMB 24	; Data for sprites.
 bas_firstpos:	RMB 1	; First position of cursor.
 bas_ttypos:	RMB 1	; Current position on screen.
 bas_curcolor:	RMB 1	; Current color.
@@ -4187,9 +4296,8 @@ bas_gosubptr:	RMB 1	; Stack for GOSUB/RETURN.
 bas_dataptr:	RMB 1	; Pointer for DATA.
 bas_arrays:	RMB 1	; Pointer to where arrays start.
 bas_last_array:	RMB 1	; Pointer to end of array list.
-bas_strptr:	RMB 1	; Pointer to space for strings.
-bas_memlimit:	RMB 1	; Mmemory limit.
-bas_listst:	RMB 1	; Start of LIST.
+bas_strptr:	RMB 1	; Pointer to space for strings processing.
+bas_strbase:	RMB 1	; Pointer to base for strings space.
 bas_listen:	RMB 1	; End of LIST.
 bas_func:	RMB 1	; Output function (for fpprint)
 program_end:	RMB 1	; Pointer to program's end.
@@ -4201,10 +4309,10 @@ SCRATCH:    ORG $100,$100,"-RWBN"
 	;
 	; 8-bits variables
 	;
-ISRVEC:     RMB 2       ; Pointer to ISR vector (required by Intellivision ROM)
-_int:       RMB 1       ; Signals interrupt received
-_ntsc:      RMB 1       ; bit 0 = 1=NTSC, 0=PAL. Bit 1 = 1=ECS detected.
-_mode:	RMB 1	; Video mode setup.
+ISRVEC:		RMB 2	; Pointer to ISR vector (required by Intellivision ROM)
+_int:		RMB 1	; Signals interrupt received
+_ntsc:		RMB 1	; bit 0 = 1=NTSC, 0=PAL. Bit 1 = 1=ECS detected.
+_mode:		RMB 1	; Video mode setup.
 _border_color:  RMB 1   ; Border color
 _border_mask:   RMB 1   ; Border mask
 _gram_target:	RMB 1	; Target GRAM card.
