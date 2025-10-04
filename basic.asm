@@ -1241,6 +1241,7 @@ bas_print:	PROC
 	CALL get_next
 	TSTR R0
 	BNE @@5
+	DECR R4
 	PULR PC
 @@6:
 	DECR R4
