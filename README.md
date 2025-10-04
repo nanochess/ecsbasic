@@ -38,6 +38,9 @@ The following statements are supported:
     v = expr
     IF expr THEN line
     IF expr THEN statement
+    IF expr THEN statement ELSE statement
+    GOTO line
+    STOP
     INPUT v
     INPUT v$
     INPUT "string";v
@@ -45,6 +48,7 @@ The following statements are supported:
     PRINT expr
     PRINT expr$
     PRINT "string"
+    PRINT "string";
     PRINT "string";expr
     PRINT "string";expr$
     GOSUB line
@@ -125,6 +129,8 @@ The following expression operators are supported:
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings.
 
 Currently, the number input only allows for 16-bit integers, that are translated to floating-point. However, the number output is able to show fractions, and exponents.
+
+If you get an error, you can do debugging of the program by using PRINT to see the variables, and using GOTO to re-enter a program. RUN resets all variables.
 
 ![image](shot0004.gif)
 
