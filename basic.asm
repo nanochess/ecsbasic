@@ -481,6 +481,9 @@ keywords:
 	DECLE "ASC",0
 	DECLE "LEN",0
 	DECLE "CHR$",0
+	DECLE "LEFT$",0
+	DECLE "MID$",0
+	DECLE "RIGHT$",0
 	DECLE 0
 
 	;
@@ -2862,7 +2865,7 @@ bas_expr7:	PROC
 	BNC @@6
 	MOVR R0,R1
 	ADDI #@@0-TOKEN_FUNC,R1
-	CMPI #@@0+13,R1
+	CMPI #@@0+16,R1
 	BC @@6
 	MVI@ R1,R7
 @@0:
@@ -2870,15 +2873,21 @@ bas_expr7:	PROC
 	DECLE @@ABS
 	DECLE @@SGN
 	DECLE @@RND
+
 	DECLE @@STICK
 	DECLE @@STRIG
 	DECLE @@KEY
 	DECLE @@BK
+
 	DECLE @@PEEK
 	DECLE @@USR
 	DECLE @@ASC
 	DECLE @@LEN
+
 	DECLE @@CHR
+	DECLE @@LEFT
+	DECLE @@MID
+	DECLE @@RIGHT
 
 @@RND:
 	PSHR R4
@@ -3088,6 +3097,127 @@ bas_expr7:	PROC
 	MVO@ R0,R5
 	SETC
 	PULR PC
+
+	; LEFT$(val,l)
+@@LEFT:
+	CALL get_next
+	CMPI #$28,R0
+	BNE @@2
+	CALL bas_expr
+	BNC bas_type_err
+	PSHR R3
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@2
+	CALL bas_expr
+	BC bas_type_err
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PSHR R0
+	CALL get_next
+	CMPI #$29,R0
+	BNE @@2
+	PULR R2
+	CLRR R1
+	PULR R3
+	B @@strcommon
+
+	; MID$(val,p) or MID$(val,p,l)
+@@MID:
+	CALL get_next
+	CMPI #$28,R0
+	BNE @@2
+	CALL bas_expr
+	BNC bas_type_err
+	PSHR R3
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@2
+	CALL bas_expr
+	BC bas_type_err
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	DECR R0		; Starts at one.
+	PSHR R0
+	CALL get_next
+	CMPI #$29,R0
+	BEQ @@19
+	CMPI #$2C,R0
+	BNE @@2
+	CALL bas_expr
+	BC bas_type_err
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PSHR R0
+	CALL get_next
+	CMPI #$29,R0
+	BNE @@2
+	PULR R2
+	B @@20
+@@19:	MVII #$7FFF,R2
+@@20:	PULR R1
+	PULR R3
+@@strcommon:
+	; Limit start position.
+	MVI@ R3,R0
+	TSTR R1
+	BPL @@21
+	CLRR R1
+@@21:	CMPR R0,R1
+	BEQ @@22
+	BNC @@22
+	MOVR R0,R1
+	; Limit length.
+@@22:	TSTR R2
+	BPL @@23
+	CLRR R2
+@@23:	ADDR R1,R2
+	CMPR R0,R2
+	BEQ @@24
+	BNC @@24
+	MOVR R0,R2
+@@24:	SUBR R1,R2
+	INCR R3
+	MOVR R3,R0
+	ADDR R1,R0
+	MOVR R2,R1
+	PSHR R4
+	CALL string_create
+	PULR R4
+	SETC		; String.
+	PULR PC
+
+	; RIGHT$(val,l)
+@@RIGHT:
+	CALL get_next
+	CMPI #$28,R0
+	BNE @@2
+	CALL bas_expr
+	BNC bas_type_err
+	PSHR R3
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@2
+	CALL bas_expr
+	BC bas_type_err
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	PSHR R0
+	CALL get_next
+	CMPI #$29,R0
+	BNE @@2
+	PULR R0
+	PULR R3
+	MVI@ R3,R1
+	PSHR R3
+	MOVR R0,R2
+	SUBR R2,R1
+	PULR R0
+	B @@strcommon
 
 @@indirect:
 	MOVR R0,PC

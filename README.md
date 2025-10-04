@@ -113,8 +113,12 @@ The following expression operators are supported:
     ASC(str)
     LEN(str)
     CHR$(expr)
-
-String support allows comparison between strings, and string concatenation. There's no support for arrays of strings.
+    LEFT$(str,length)
+    MID$(str,pos)
+    MID$(str,pos,length)
+    RIGHT$(str,length)
+    
+String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings.
 
 Currently, the number input only allows for 16-bit integers, that are translated to floating-point. However, the number output is able to show fractions, and exponents.
 
