@@ -422,6 +422,16 @@ keywords_exec:
 	DECLE bas_syntax_error	; TRIG
 	DECLE bas_syntax_error	; KEY
 	DECLE bas_bk	; BK
+	DECLE bas_syntax_error	; PEEK
+	DECLE bas_syntax_error	; USR
+	DECLE bas_syntax_error	; ASC
+	DECLE bas_syntax_error	; LEN
+	DECLE bas_syntax_error	; CHR$
+	DECLE bas_syntax_error	; LEFT$
+	DECLE bas_syntax_error	; MID$
+	DECLE bas_syntax_error	; RIGHT$
+	DECLE bas_syntax_error	; VAL
+	DECLE bas_syntax_error	; INKEY$
 
 	;
 	; BASIC keywords.
@@ -484,6 +494,8 @@ keywords:
 	DECLE "LEFT$",0
 	DECLE "MID$",0
 	DECLE "RIGHT$",0
+	DECLE "VAL",0
+	DECLE "INKEY$",0
 	DECLE 0
 
 	;
@@ -2442,6 +2454,9 @@ bas_type_err:	PROC
 
 	;
 	; Expression evaluation
+	; The type is passed in the Carry flag.
+	; Carry flag clear = Number.
+	; Carry flag set = String.
 	;
 bas_expr:	PROC
 	PSHR R5
@@ -2865,7 +2880,7 @@ bas_expr7:	PROC
 	BNC @@6
 	MOVR R0,R1
 	ADDI #@@0-TOKEN_FUNC,R1
-	CMPI #@@0+16,R1
+	CMPI #@@0+18,R1
 	BC @@6
 	MVI@ R1,R7
 @@0:
@@ -2888,6 +2903,9 @@ bas_expr7:	PROC
 	DECLE @@LEFT
 	DECLE @@MID
 	DECLE @@RIGHT
+
+	DECLE @@VAL
+	DECLE @@INKEY
 
 @@RND:
 	PSHR R4
@@ -3218,6 +3236,45 @@ bas_expr7:	PROC
 	SUBR R2,R1
 	PULR R0
 	B @@strcommon
+
+	; VAL(str)
+@@VAL:	CALL bas_expr_paren
+	BNC bas_type_err
+	PSHR R4
+	MOVR R3,R4
+	MOVR R3,R5
+	MVI@ R4,R0
+	TSTR R0
+	BEQ @@25
+@@26:	MVI@ R4,R1
+	MVO@ R1,R5
+	DECR R0
+	BNE @@26
+@@25:	CLRR R0
+	MVO@ R0,R5
+	MOVR R3,R4
+	CALL get_next
+	CALL parse_number
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	CLRC
+	PULR PC
+
+	; INKEY$
+@@INKEY:
+	PSHR R4
+	CALL SCAN_KBD
+	CLRR R1
+	CMPI #KEY.NONE,R0
+	BEQ @@27
+	MVO R0,temp1
+	INCR R1
+@@27:	MVII #temp1,R0
+	CALL string_create
+	PULR R4
+	SETC
+	PULR PC
 
 @@indirect:
 	MOVR R0,PC
