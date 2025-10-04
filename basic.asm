@@ -300,6 +300,7 @@ basic_restart:
 
 	MVI bas_ttypos,R0
 	MVO R0,bas_firstpos
+	
 	; Build an example program
     IF 0
 	MVII #program_start,R4
@@ -432,6 +433,7 @@ keywords_exec:
 	DECLE bas_syntax_error	; RIGHT$
 	DECLE bas_syntax_error	; VAL
 	DECLE bas_syntax_error	; INKEY$
+	DECLE bas_syntax_error	; STR$
 
 	;
 	; BASIC keywords.
@@ -496,6 +498,7 @@ keywords:
 	DECLE "RIGHT$",0
 	DECLE "VAL",0
 	DECLE "INKEY$",0
+	DECLE "STR$",0
 	DECLE 0
 
 	;
@@ -1082,11 +1085,13 @@ bas_list:	PROC
 	; Erase the whole program.
 	;
 new_program:	PROC
+	PSHR R5
 	MVII #program_start,R4
 	MVO R4,program_end
 	CLRR R0
 	MVO@ R0,R4
-	MOVR R5,PC
+	CALL restart_pointers
+	PULR PC
 	ENDP
 
 	;
@@ -1240,6 +1245,8 @@ bas_print:	PROC
 	PSHR R4
 	MOVR R2,R0
 	MOVR R3,R1
+	MVII #bas_output,R2
+	MVO R2,bas_func
 	CALL fpprint
 	PULR R4
 	B @@3
@@ -2880,7 +2887,7 @@ bas_expr7:	PROC
 	BNC @@6
 	MOVR R0,R1
 	ADDI #@@0-TOKEN_FUNC,R1
-	CMPI #@@0+18,R1
+	CMPI #@@0+19,R1
 	BC @@6
 	MVI@ R1,R7
 @@0:
@@ -2906,6 +2913,7 @@ bas_expr7:	PROC
 
 	DECLE @@VAL
 	DECLE @@INKEY
+	DECLE @@STR
 
 @@RND:
 	PSHR R4
@@ -3275,6 +3283,30 @@ bas_expr7:	PROC
 	PULR R4
 	SETC
 	PULR PC
+
+	; STR
+@@STR:	CALL bas_expr_paren
+	BC bas_type_err
+	PSHR R4
+	MVII #@@STR2,R2
+	MVO R2,bas_func
+	CLRR R2
+	MVO R2,temp1
+	CALL fpprint
+	MVII #basic_buffer,R0
+	MVI temp1,R1
+	CALL string_create
+	PULR R4
+	SETC
+	PULR PC
+
+@@STR2:
+	MVI temp1,R1
+	INCR R1
+	MVO R1,temp1
+	ADDI #basic_buffer-1,R1
+	MVO@ R0,R1
+	MOVR R5,PC
 
 @@indirect:
 	MOVR R0,PC
@@ -4078,6 +4110,7 @@ bas_strptr:	RMB 1	; Pointer to space for strings.
 bas_memlimit:	RMB 1	; Mmemory limit.
 bas_listst:	RMB 1	; Start of LIST.
 bas_listen:	RMB 1	; End of LIST.
+bas_func:	RMB 1	; Output function (for fpprint)
 program_end:	RMB 1	; Pointer to program's end.
 lfsr:		RMB 1	; Random number
 _mode_color:	RMB 1	; Colors for Color Stack mode.

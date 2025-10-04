@@ -118,6 +118,7 @@ The following expression operators are supported:
     MID$(str,pos,length)
     RIGHT$(str,length)
     VAL(str)
+    STR$(expr)
     INKEY$
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings.
