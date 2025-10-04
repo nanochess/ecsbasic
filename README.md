@@ -18,11 +18,14 @@ The same program for the Mattel ECS BASIC takes 210 seconds:
 
 The resulting value of this benchmark is meaningless, because the calculations exceed completely the floating-point precision.
 
-There's no roadmap currently, and so far I've only implemented a numeric BASIC language (no string support, except for fixed strings in PRINT)
+My current roadmap:
 
-There are 26 variables (A-Z), and 26 arrays (A-Z) that require DIM first to declare them.
+* Add support for floating-point number input.
+* Add mathematical functions (COS, SIN, ATN, TAN, LOG, EXP, and power operator)
 
-The floating-point support is 25-bit mantissa, 7-bit exponent, and sign.
+There are 26 variables (A-Z), 26 string variables (A$-Z$), and 26 arrays (A-Z) requiring DIM first to declare them.
+
+The floating-point support is 32 bits (25-bit mantissa, 7-bit exponent, and sign bit)
 
 The following statements are supported:
     

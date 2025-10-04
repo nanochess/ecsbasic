@@ -25,7 +25,8 @@
 	; Revision date: Oct/03/2025. Added ASC, LEN, CHR$, LEFT$, MID$, RIGHT$, INKEY$, VAL,
 	;                             STR$, and INSTR. Detects if new program line exceeds
 	;                             available memory. Added garbage collector for strings.
-	; Revision date: Oct/04/2025. Added ON GOTO and ON GOSUB.
+	; Revision date: Oct/04/2025. Added ON GOTO and ON GOSUB. Inserting a line resets
+	;                             the variable data.
 	;
 
 	;
@@ -370,6 +371,7 @@ main_loop:
 	MVI basic_buffer+1,R3
 	MVII #basic_buffer+2,R2
 	CALL line_insert
+	CALL restart_pointers
 @@3:
 	MVI bas_ttypos,R0
 	MVO R0,bas_firstpos
@@ -1180,7 +1182,7 @@ bas_run:	PROC
 	;
 restart_pointers:	PROC
 	PSHR R5
-	CALL data_locate
+	CLRR R0
 	MVO R0,bas_dataptr
 	
 	MVI program_end,R3
@@ -1790,22 +1792,24 @@ bas_rem:	PROC
 	;
 	; Locate the first DATA statement in the program
 	;
+	; Output:
+	;   R4 = Pointer to first DATA element (or zero if none).
+	;
 data_locate:	PROC
 	PSHR R5
 	MVII #program_start,R4
-@@3:	MVI@ R4,R0
-	INCR R4
-	TSTR R0
-	BEQ @@1
-@@2:	MVI@ R4,R0
-	TSTR R0
-	BEQ @@3
-	CMPI #TOKEN_DATA,R0
-	BNE @@2
-	MOVR R4,R0
+@@3:	MVI@ R4,R0	; Get pointer.
+	INCR R4		; Jump over the line number.
+	TSTR R0		; End of program?
+	BEQ @@1		; Yes, jump.
+@@2:	MVI@ R4,R0	; Read tokenized line.
+	TSTR R0		; End of line?
+	BEQ @@3		; Yes, jump.
+	CMPI #TOKEN_DATA,R0	; Found DATA statement?
+	BNE @@2		; No, jump.
 	PULR PC
 
-@@1:	CLRR R0
+@@1:	CLRR R4
 	PULR PC
 	ENDP
 
@@ -1837,9 +1841,8 @@ bas_restore:	PROC
 @@1:	DECR R4
 	PSHR R4
 	CALL data_locate
-	TSTR R0
+	TSTR R4
 	BEQ @@6
-	MOVR R0,R4
 @@2:	MVO R4,bas_dataptr
 	PULR R4
 	PULR PC
@@ -1870,6 +1873,9 @@ bas_read:	PROC
 	PSHR R4
 	PSHR R5
 	MVI bas_dataptr,R4
+	TSTR R4
+	BNE @@15
+	CALL data_locate
 	TSTR R4
 	BEQ @@6
 @@15:	MVI@ R4,R0
