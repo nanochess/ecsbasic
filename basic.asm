@@ -28,14 +28,14 @@
 	; Revision date: Oct/04/2025. Added ON GOTO and ON GOSUB. Inserting a line resets
 	;                             the variable data.
 	; Revision date: Oct/05/2025. Added SIN, COS, TAN, LOG, EXP, SQR, ATN, and the power
-	;                             operator.
+	;                             operator. Added PLOT.
 	;
 
 	;
 	; TODO:
 	; * Maybe if tokenizes DATA, avoid tokenizing until finding colon.
 	; * Add TIMER to access current video frame number.
-	; * Add ATN, LOG, EXP, SQR, and power-of operator.
+	; * Add PRINT AT.
 	;
 
 	ROMW 16
@@ -78,19 +78,19 @@ TOKEN_GOSUB:	EQU $0110
 
 TOKEN_DATA:	EQU $0115
 
-TOKEN_AND:	EQU $0120
-TOKEN_NOT:	EQU $0121
-TOKEN_OR:	EQU $0122
-TOKEN_XOR:	EQU $0123
+TOKEN_AND:	EQU $0121
+TOKEN_NOT:	EQU $0122
+TOKEN_OR:	EQU $0123
+TOKEN_XOR:	EQU $0124
 
-TOKEN_LE:	EQU $0124
-TOKEN_GE:	EQU $0125
-TOKEN_NE:	EQU $0126
-TOKEN_EQ:	EQU $0127
-TOKEN_LT:	EQU $0128
-TOKEN_GT:	EQU $0129
+TOKEN_LE:	EQU $0125
+TOKEN_GE:	EQU $0126
+TOKEN_NE:	EQU $0127
+TOKEN_EQ:	EQU $0128
+TOKEN_LT:	EQU $0129
+TOKEN_GT:	EQU $012a
 
-TOKEN_FUNC:	EQU $012a
+TOKEN_FUNC:	EQU $012b
 
 	;
 	; Error numbers.
@@ -419,6 +419,7 @@ keywords_exec:
 	DECLE bas_border
 	DECLE bas_poke
 	DECLE bas_on
+	DECLE bas_plot
 
 	; Operators and BASIC functions cannot be executed directly
 	DECLE bas_syntax_error	; AND
@@ -495,17 +496,19 @@ keywords:
 	DECLE "BORDER",0
 	DECLE "POKE",0	
 	DECLE "ON",0
-	DECLE "AND",0	; $0120
+	DECLE "PLOT",0	; $0120
+
+	DECLE "AND",0	; $0121
 	DECLE "NOT",0
 	DECLE "OR",0
 	DECLE "XOR",0
-	DECLE "<=",0	; $0124
+	DECLE "<=",0	; $0125
 	DECLE ">=",0
 	DECLE "<>",0
 	DECLE "=",0
 	DECLE "<",0
 	DECLE ">",0
-	DECLE "INT",0	; $012a
+	DECLE "INT",0	; $012b
 	DECLE "ABS",0
 	DECLE "SGN",0
 	DECLE "RND",0
@@ -2509,6 +2512,92 @@ bas_on:	PROC
 @@4:	PULR R0
 	DECR R4
 	PULR PC
+	ENDP
+
+	;
+	; PLOT
+	;
+bas_plot:	PROC
+	PSHR R5
+	CALL bas_expr_int
+	PSHR R0
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@1
+	CALL bas_expr_int
+	PSHR R0
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@1
+	CALL bas_expr_int
+	ANDI #7,R0
+	MOVR R0,R2
+	PULR R1
+	PULR R0
+	CMPI #40,R0	; Out of the screen
+	BC @@2
+	CMPI #24,R1	; Out of the screen
+	BC @@2
+	MOVR R1,R3
+	SLR R3,1
+	MOVR R3,R5
+	SLL R3,2	; x4
+	ADDR R5,R3	; x5
+	SLL R3,2	; x20
+	ADDI #$0200,R3	; For the backtab
+	MOVR R3,R5
+	MOVR R0,R3
+	SLR R3,1
+	ADDR R3,R5
+	MVI@ R5,R3
+	DECR R5
+	PSHR R4
+	MOVR R3,R4
+	ANDI #$1800,R4
+	CMPI #$1000,R4
+	BEQ @@7
+	MVII #$37FF,R3
+@@7:	PULR R4
+	RRC R1,1
+	BC @@3
+	; Y bit 0 = 0
+	RRC R0,1
+	BC @@4
+	ANDI #$FFF8,R3
+	ADDR R2,R3
+	MVO@ R3,R5
+	PULR PC
+@@4:
+	SLL R2,2
+	SLL R2,1
+	ANDI #$FFC7,R3
+	ADDR R2,R3
+	MVO@ R3,R5
+	PULR PC
+	; Y bit 0 = 1
+@@3:	RRC R0,1
+	BC @@5
+	SLL R2,2
+	SLL R2,2
+	SLL R2,2
+	ANDI #$FE3F,R3
+	ADDR R2,R3
+	MVO@ R3,R5
+	PULR PC
+
+@@5:	SWAP R2
+	SLL R2,1
+	CMPI #$0800,R2
+	BNC @@6
+	ADDI #$1800,R2
+@@6:
+	ANDI #$D9FF,R3
+	ADDR R2,R3
+	MVO@ R3,R5
+@@2:	PULR PC
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
 	ENDP
 
 	;

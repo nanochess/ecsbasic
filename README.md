@@ -84,6 +84,7 @@ The following statements are supported:
     POKE addr,v
     ON expr GOTO line1,line2,line3
     ON expr GOSUB line1,line2,line3
+    PLOT x,y,color
 
 Statements can be concatenated on a single line using the colon as a separator.
 
