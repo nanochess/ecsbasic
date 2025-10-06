@@ -28,14 +28,12 @@
 	; Revision date: Oct/04/2025. Added ON GOTO and ON GOSUB. Inserting a line resets
 	;                             the variable data.
 	; Revision date: Oct/05/2025. Added SIN, COS, TAN, LOG, EXP, SQR, ATN, and the power
-	;                             operator. Added PLOT.
+	;                             operator. Added PLOT. Added PRINT AT and TIMER.
 	;
 
 	;
 	; TODO:
 	; * Maybe if tokenizes DATA, avoid tokenizing until finding colon.
-	; * Add TIMER to access current video frame number.
-	; * Add PRINT AT.
 	;
 
 	ROMW 16
@@ -91,6 +89,8 @@ TOKEN_LT:	EQU $0129
 TOKEN_GT:	EQU $012a
 
 TOKEN_FUNC:	EQU $012b
+
+TOKEN_AT:	EQU $0147
 
 	;
 	; Error numbers.
@@ -459,6 +459,8 @@ keywords_exec:
 	DECLE bas_syntax_error	; EXP
 	DECLE bas_syntax_error	; SQR
 	DECLE bas_syntax_error	; ATN
+	DECLE bas_syntax_error	; TIMER
+	DECLE bas_syntax_error	; AT
 
 	;
 	; BASIC keywords.
@@ -512,29 +514,38 @@ keywords:
 	DECLE "ABS",0
 	DECLE "SGN",0
 	DECLE "RND",0
+
 	DECLE "STICK",0
 	DECLE "STRIG",0
 	DECLE "KEY",0
 	DECLE "BK",0
+
 	DECLE "PEEK",0
 	DECLE "USR",0
 	DECLE "ASC",0
 	DECLE "LEN",0
+
 	DECLE "CHR$",0
 	DECLE "LEFT$",0
 	DECLE "MID$",0
 	DECLE "RIGHT$",0
-	DECLE "VAL",0
+
+	DECLE "VAL",0	; $013B
 	DECLE "INKEY$",0
 	DECLE "STR$",0
 	DECLE "INSTR",0
+
 	DECLE "SIN",0
 	DECLE "COS",0
 	DECLE "TAN",0
 	DECLE "LOG",0
-	DECLE "EXP",0
+
+	DECLE "EXP",0	; $0143
 	DECLE "SQR",0
 	DECLE "ATN",0
+	DECLE "TIMER",0
+
+	DECLE "AT",0	; $0147 Must be after ATN
 	DECLE 0
 
 	;
@@ -1240,6 +1251,14 @@ bas_stop:	PROC
 	;
 bas_print:	PROC
 	PSHR R5
+	CALL get_next
+	CMPI #TOKEN_AT,R0
+	BNE @@5
+	CALL bas_expr_int
+	CMPI #240,R0
+	BC @@10
+	ADDI #$0200,R0
+	MVO R0,bas_ttypos
 @@3:
 	CALL get_next
 @@5:
@@ -1319,6 +1338,10 @@ bas_print:	PROC
 
 	MVII #ERR_SYNTAX,R0
 	CALL bas_error
+
+@@10:	MVII #ERR_BOUNDS,R0
+	CALL bas_error
+
 	PULR PC
 	ENDP
 
@@ -3095,7 +3118,7 @@ bas_expr7:	PROC
 	
 	CMPI #TOKEN_FUNC,R0
 	BNC @@6
-	CMPI #TOKEN_FUNC+27,R0
+	CMPI #TOKEN_FUNC+28,R0
 	BC @@2		; Syntax error.
 	MVII #@@0-TOKEN_FUNC,R1
 	ADDR R0,R1
@@ -3134,6 +3157,7 @@ bas_expr7:	PROC
 	DECLE @@EXP
 	DECLE @@SQR
 	DECLE @@ATN
+	DECLE @@TIMER
 
 @@RND:
 	PSHR R4
@@ -3233,6 +3257,15 @@ bas_expr7:	PROC
 	PSHR R4
 	CALL fparctan
 	PULR R4
+	MOVR R0,R2
+	MOVR R1,R3
+	CLRC
+	PULR PC
+
+@@TIMER:
+	MVI _frame+1,R0
+	MVI _frame,R1
+	CALL fpfromuint24
 	MOVR R0,R2
 	MOVR R1,R3
 	CLRC

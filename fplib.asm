@@ -13,6 +13,7 @@
 	; Revision date: Sep/22/2025. fpmul speed-up. Corrected bug in rounding (so now
 	;                             1.0 / 3.0 * 3.0 = 1.0)
 	; Revision date: Sep/24/2025. Added fprnd.
+	; Revision date: Oct/05/2025. Added fpfromuint24.
 	;
 
 	; Temporary
@@ -426,6 +427,35 @@ fpfromuint:	PROC
 	ANDI #$00FF,R0
 	ANDI #$FF00,R1
 	PSHR R2
+	MVII #FPEXP_BIAS+$18,R5
+	; Reuse the normalize code.
+	B fpadd.11	; Normalize
+
+@@2:	PULR PC
+	ENDP
+
+	;
+	; Convert long unsigned integer to floating-point
+	;
+	; Input: R0 = unsigned value.
+	; Output: R0,R1 = Floating-point value.
+	;
+fpfromuint24:	PROC
+	PSHR R5
+	TSTR R0
+	BNE @@1
+	TSTR R1
+	BEQ @@2
+@@1:
+	CLRR R2
+	PSHR R2
+	SWAP R0
+	ANDI #$FF00,R0
+	SWAP R1
+	MOVR R1,R2
+	ANDI #$00FF,R2
+	ADDR R2,R0
+	ANDI #$FF00,R1
 	MVII #FPEXP_BIAS+$18,R5
 	; Reuse the normalize code.
 	B fpadd.11	; Normalize

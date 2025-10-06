@@ -53,6 +53,7 @@ The following statements are supported:
     PRINT "string";
     PRINT "string";expr
     PRINT "string";expr$
+    PRINT AT 20;"string"
     GOSUB line
     RETURN
     FOR v=x TO y
@@ -138,6 +139,7 @@ The following expression operators are supported:
     EXP(expr)
     SQR(expr)
     ATN(expr)
+    TIMER
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings.
 
