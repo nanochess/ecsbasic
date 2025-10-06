@@ -27,12 +27,14 @@
 	;                             available memory. Added garbage collector for strings.
 	; Revision date: Oct/04/2025. Added ON GOTO and ON GOSUB. Inserting a line resets
 	;                             the variable data.
+	; Revision date: Oct/05/2025. Added SIN, COS, TAN, LOG, EXP, and SQR.
 	;
 
 	;
 	; TODO:
 	; * Maybe if tokenizes DATA, avoid tokenizing until finding colon.
 	; * Add TIMER to access current video frame number.
+	; * Add ATN, LOG, EXP, SQR, and power-of operator.
 	;
 
 	ROMW 16
@@ -447,6 +449,13 @@ keywords_exec:
 	DECLE bas_syntax_error	; VAL
 	DECLE bas_syntax_error	; INKEY$
 	DECLE bas_syntax_error	; STR$
+	DECLE bas_syntax_error	; INSTR
+	DECLE bas_syntax_error	; SIN
+	DECLE bas_syntax_error	; COS
+	DECLE bas_syntax_error	; TAN
+	DECLE bas_syntax_error	; LOG
+	DECLE bas_syntax_error	; EXP
+	DECLE bas_syntax_error	; SQR
 
 	;
 	; BASIC keywords.
@@ -514,6 +523,12 @@ keywords:
 	DECLE "INKEY$",0
 	DECLE "STR$",0
 	DECLE "INSTR",0
+	DECLE "SIN",0
+	DECLE "COS",0
+	DECLE "TAN",0
+	DECLE "LOG",0
+	DECLE "EXP",0
+	DECLE "SQR",0
 	DECLE 0
 
 	;
@@ -2973,7 +2988,7 @@ bas_expr7:	PROC
 	
 	CMPI #TOKEN_FUNC,R0
 	BNC @@6
-	CMPI #TOKEN_FUNC+20,R0
+	CMPI #TOKEN_FUNC+26,R0
 	BC @@2		; Syntax error.
 	MVII #@@0-TOKEN_FUNC,R1
 	ADDR R0,R1
@@ -3004,6 +3019,14 @@ bas_expr7:	PROC
 	DECLE @@STR
 	DECLE @@INSTR
 
+	DECLE @@SIN
+	DECLE @@COS
+	DECLE @@TAN
+	DECLE @@LOG
+
+	DECLE @@EXP
+	DECLE @@SQR
+
 @@RND:
 	PSHR R4
 	CALL fprnd
@@ -3032,6 +3055,66 @@ bas_expr7:	PROC
 	CALL bas_expr_paren
 	BC bas_type_err
 	CALL fpabs
+	MOVR R0,R2
+	MOVR R1,R3
+	CLRC
+	PULR PC
+@@SIN:
+	CALL bas_expr_paren
+	BC bas_type_err
+	PSHR R4
+	CALL fpsin
+	PULR R4
+	MOVR R0,R2
+	MOVR R1,R3
+	CLRC
+	PULR PC
+@@COS:
+	CALL bas_expr_paren
+	BC bas_type_err
+	PSHR R4
+	CALL fpcos
+	PULR R4
+	MOVR R0,R2
+	MOVR R1,R3
+	CLRC
+	PULR PC
+@@TAN:
+	CALL bas_expr_paren
+	BC bas_type_err
+	PSHR R4
+	CALL fptan
+	PULR R4
+	MOVR R0,R2
+	MOVR R1,R3
+	CLRC
+	PULR PC
+@@LOG:
+	CALL bas_expr_paren
+	BC bas_type_err
+	PSHR R4
+	CALL fpln
+	PULR R4
+	MOVR R0,R2
+	MOVR R1,R3
+	CLRC
+	PULR PC
+@@EXP:
+	CALL bas_expr_paren
+	BC bas_type_err
+	PSHR R4
+	CALL fpexp
+	PULR R4
+	MOVR R0,R2
+	MOVR R1,R3
+	CLRC
+	PULR PC
+@@SQR:
+	CALL bas_expr_paren
+	BC bas_type_err
+	PSHR R4
+	CALL fpsqrt
+	PULR R4
 	MOVR R0,R2
 	MOVR R1,R3
 	CLRC
@@ -4343,6 +4426,7 @@ _int_vector:     PROC
 
 	INCLUDE "fplib.asm"
 	INCLUDE "fpio.asm"
+	INCLUDE "fpmath.asm"
 
 	ORG $320,$320,"-RWB"
 _frame:		RMB 2   ; Current frame number.

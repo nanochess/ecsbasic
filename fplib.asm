@@ -16,8 +16,8 @@
 	;
 
 	; Temporary
-fptemp1:	EQU $0317
-fptemp2:	EQU $0318
+fptemp1:	EQU $035e
+fptemp2:	EQU $035f
 
 FPEXP_BIAS:	EQU $3F	; The base exponent for value 1.0
 
@@ -500,39 +500,25 @@ fpfloor:	PROC
 	PSHR R3
 	MOVR R4,R5
 	ANDI #$FF00,R1	; Remove exponent
-	SETC		; Restore bit one in mantissa
+	SETC		; Restore bit one in mantissa.
 	RRC R0,1
 	RRC R1,1
+	RRC R0,1	; Extra bit to detect carry.
+	RRC R1,1
+	INCR R5
 	INCR R5
 	MVII #$FFFF,R2	; Mask for fraction.
 	MOVR R2,R3
-	SUBI #FPEXP_BIAS,R4
+	SUBI #FPEXP_BIAS-2,R4
 @@4:	CLRC
 	RRC R2,1
 	RRC R3,1
 	DECR R4
-	BPL @@4
-@@5: 	ANDI #$FF80,R3
-	ADDR R3,R1	; Add fraction rounding.
+	BNE @@4
+@@5: 	ADDR R3,R1	; Add fraction rounding.
 	ADCR R0
-	BNC @@6
-	RRC R0,1
-	RRC R1,1
-	CLRC
-	RRC R2,1
-	RRC R3,1
-	INCR R5		; Increase exponent.
-@@6:	ADDR R2,R0
-	BNC @@7
-	RRC R0,1
-	RRC R1,1
-	CLRC
-	RRC R2,1
-	RRC R3,1
-	INCR R5
-@@7:
-	ANDI #$FF80,R3	; Now remove fraction.
-	COMR R2
+	ADDR R2,R0
+	COMR R2		; Invert fraction mask...
 	COMR R3
 	ANDR R2,R0
 	ANDR R3,R1
@@ -670,13 +656,14 @@ fpdivby2:	PROC
 fpmulby2:	PROC
 	MOVR R1,R2
 	ANDI #$7F,R2
+	BEQ @@2
 	CMPI #$7F,R2
 	BNE @@1
 	MVII #$FFFF,R0
 	ANDI #$0080,R1
 	ADDI #$FF7E,R1
 @@1:	INCR R1
-	MOVR R5,PC
+@@2:	MOVR R5,PC
 	ENDP
 
 	;

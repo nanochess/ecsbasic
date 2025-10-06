@@ -130,6 +130,12 @@ The following expression operators are supported:
     STR$(expr)
     INKEY$
     INSTR(pos,str1,str2)
+    SIN(expr)
+    COS(expr)
+    TAN(expr)
+    LOG(expr)
+    EXP(expr)
+    SQR(expr)
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings.
 
