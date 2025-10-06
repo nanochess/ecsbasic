@@ -6,7 +6,7 @@
 	;
 	; Creation date: Sep/20/2025. Added fpsin and fpcos.
 	; Revision date: Oct/05/2025. Corrected bug in both fpsin and fpcos. Added fptan, fpln,
-	;                             fpexp, and fpsqrt.
+	;                             fpexp, fpsqrt, fparctan, and fppow.
 	;
 
 	; These routines are based on the mathematic routines
@@ -150,6 +150,24 @@ fpsqrt:	PROC
 	PSHR R5
 	CALL fpln	; ln
 	CALL fpdivby2	; * 0.5
+	CALL fpexp	; exp
+	PULR PC
+	ENDP
+
+	;
+	; pow function
+	;
+	; r0,r1 = number.
+	; r2,r3 = power.
+	;
+fppow:	PROC
+	PSHR R5
+	PSHR R2
+	PSHR R3
+	CALL fpln	; ln
+	PULR R3
+	PULR R2
+	CALL fpmul
 	CALL fpexp	; exp
 	PULR PC
 	ENDP
@@ -348,3 +366,151 @@ fpexp:	PROC
 	ADDR R4,R1
 	PULR PC
 	ENDP
+
+	;
+	; arctan function
+	;
+fparctan:	PROC
+	PSHR R5
+	MOVR R1,R2
+	ANDI #$80,R2
+	PSHR R2
+	ANDI #$FF7F,R1	; Make it positive (fpabs)
+	PSHR R0
+	PSHR R1
+	MVII #$0000,R2
+	MVII #$003F,R3
+	CALL fpcomp
+	PULR R1
+	PULR R0
+	BEQ @@1
+	BNC @@1
+	MVII #1,R2
+	PSHR R2
+	MOVR R0,R2
+	MOVR R1,R3
+	MVII #$0000,R0
+	MVII #$003F,R1
+	CALL fpdiv
+	B @@2
+
+@@1:	CLRR R2
+	PSHR R2
+@@2:	
+	PSHR R0
+	PSHR R1
+	MOVR R0,R2
+	MOVR R1,R3
+	CALL fpmul
+	PSHR R0
+	PSHR R1
+	MVII #$C5FD,R2
+	MVII #$7433,R3
+	CALL fpmul
+	MVII #$ADB1,R2
+	MVII #$9CB6,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	PSHR R2
+	PSHR R3
+	CALL fpmul
+	MVII #$7DA2,R2
+	MVII #$FA38,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	PSHR R2
+	PSHR R3
+	CALL fpmul
+	MVII #$AF88,R2
+	MVII #$46B9,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	PSHR R2
+	PSHR R3
+	CALL fpmul
+	MVII #$682E,R2
+	MVII #$143A,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	PSHR R2
+	PSHR R3
+	CALL fpmul
+	MVII #$EF03,R2
+	MVII #$46BA,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	PSHR R2
+	PSHR R3
+	CALL fpmul
+	MVII #$335C,R2
+	MVII #$C23B,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	PSHR R2
+	PSHR R3
+	CALL fpmul
+	MVII #$72C1,R2
+	MVII #$1EBB,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	PSHR R2
+	PSHR R3
+	CALL fpmul
+	MVII #$C6E4,R2
+	MVII #$243B,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	PSHR R2
+	PSHR R3
+	CALL fpmul
+	MVII #$248F,R2
+	MVII #$F6BC,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	PSHR R2
+	PSHR R3
+	CALL fpmul
+	MVII #$9999,R2
+	MVII #$7E3C,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	PSHR R2
+	PSHR R3
+	CALL fpmul
+	MVII #$5555,R2
+	MVII #$54BD,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	CALL fpmul
+	MVII #$FFFF,R2
+	MVII #$FE3E,R3
+	CALL fpadd
+	PULR R3
+	PULR R2
+	CALL fpmul
+	PULR R4
+	TSTR R4
+	BEQ @@3
+	MOVR R0,R2
+	MOVR R1,R3
+	MVII #$921F,R0
+	MVII #$B43F,R1
+	CALL fpsub
+@@3:	PULR R4
+	TSTR R4
+	BEQ @@4
+	XORI #$0080,R1
+@@4:	PULR PC
+	ENDP
+

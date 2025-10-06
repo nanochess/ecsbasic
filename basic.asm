@@ -27,7 +27,8 @@
 	;                             available memory. Added garbage collector for strings.
 	; Revision date: Oct/04/2025. Added ON GOTO and ON GOSUB. Inserting a line resets
 	;                             the variable data.
-	; Revision date: Oct/05/2025. Added SIN, COS, TAN, LOG, EXP, and SQR.
+	; Revision date: Oct/05/2025. Added SIN, COS, TAN, LOG, EXP, SQR, ATN, and the power
+	;                             operator.
 	;
 
 	;
@@ -456,6 +457,7 @@ keywords_exec:
 	DECLE bas_syntax_error	; LOG
 	DECLE bas_syntax_error	; EXP
 	DECLE bas_syntax_error	; SQR
+	DECLE bas_syntax_error	; ATN
 
 	;
 	; BASIC keywords.
@@ -529,6 +531,7 @@ keywords:
 	DECLE "LOG",0
 	DECLE "EXP",0
 	DECLE "SQR",0
+	DECLE "ATN",0
 	DECLE 0
 
 	;
@@ -2924,7 +2927,22 @@ bas_expr5:	PROC
 	PULR R4
 	B @@0
 
-@@2:	DECR R4
+@@2:	CMPI #$5e,R0
+	BNE @@4
+	PSHR R2
+	PSHR R3
+	CALL bas_expr6
+	BC bas_type_err
+	PULR R1
+	PULR R0
+	PSHR R4
+	CALL fppow
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	B @@0
+
+@@4:	DECR R4
 	CLRC
 @@3:	PULR PC
 	ENDP
@@ -2988,7 +3006,7 @@ bas_expr7:	PROC
 	
 	CMPI #TOKEN_FUNC,R0
 	BNC @@6
-	CMPI #TOKEN_FUNC+26,R0
+	CMPI #TOKEN_FUNC+27,R0
 	BC @@2		; Syntax error.
 	MVII #@@0-TOKEN_FUNC,R1
 	ADDR R0,R1
@@ -3026,6 +3044,7 @@ bas_expr7:	PROC
 
 	DECLE @@EXP
 	DECLE @@SQR
+	DECLE @@ATN
 
 @@RND:
 	PSHR R4
@@ -3114,6 +3133,16 @@ bas_expr7:	PROC
 	BC bas_type_err
 	PSHR R4
 	CALL fpsqrt
+	PULR R4
+	MOVR R0,R2
+	MOVR R1,R3
+	CLRC
+	PULR PC
+@@ATN:
+	CALL bas_expr_paren
+	BC bas_type_err
+	PSHR R4
+	CALL fparctan
 	PULR R4
 	MOVR R0,R2
 	MOVR R1,R3

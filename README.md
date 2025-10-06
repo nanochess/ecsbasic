@@ -21,7 +21,6 @@ The resulting value of this benchmark is meaningless, because the calculations e
 My current roadmap:
 
 * Add support for floating-point number input.
-* Add mathematical functions (COS, SIN, ATN, TAN, LOG, EXP, and power operator)
 
 There are 26 variables (A-Z), 26 string variables (A$-Z$), and 26 arrays (A-Z) requiring DIM first to declare them.
 
@@ -103,6 +102,7 @@ The following expression operators are supported:
     -
     *
     /
+    ^
     -expr
     NOT expr
     (expr)
@@ -136,6 +136,7 @@ The following expression operators are supported:
     LOG(expr)
     EXP(expr)
     SQR(expr)
+    ATN(expr)
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings.
 
