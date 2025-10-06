@@ -21,6 +21,7 @@ The resulting value of this benchmark is meaningless, because the calculations e
 My current roadmap:
 
 * Add support for floating-point number input.
+* Research how to save/load programs via the cassette interface, or alternatively use the JLP Flash memory capability.
 
 There are 26 variables (A-Z), 26 string variables (A$-Z$), and 26 arrays (A-Z) requiring DIM first to declare them.
 
