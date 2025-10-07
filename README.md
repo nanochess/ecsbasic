@@ -24,7 +24,7 @@ My current roadmap:
 
 There are 26 variables (A-Z), 26 string variables (A$-Z$), and 26 arrays (A-Z) requiring DIM first to declare them.
 
-The floating-point support is 32 bits (25-bit mantissa, 7-bit exponent, and sign bit)
+The floating-point support is 32 bits (25-bit mantissa, 7-bit exponent, and sign bit). Number input and output support scientific notation.
 
 The following statements are supported:
     
@@ -143,8 +143,6 @@ The following expression operators are supported:
     FRE(expr)
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings.
-
-Currently, the number input only allows for 16-bit integers, that are translated to floating-point. However, the number output is able to show fractions, and exponents.
 
 If you get an error, you can do debugging of the program by using PRINT to see the variables, and using GOTO to re-enter a program. RUN resets all variables.
 
