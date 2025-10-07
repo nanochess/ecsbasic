@@ -29,6 +29,8 @@
 	;                             the variable data.
 	; Revision date: Oct/05/2025. Added SIN, COS, TAN, LOG, EXP, SQR, ATN, and the power
 	;                             operator. Added PLOT. Added PRINT AT and TIMER.
+	; Revision date: Oct/06/2025. Added floating-point number parsing (now can be avoided
+	;                             doing 31416 / 10000). Added FRE operator.
 	;
 
 	;
@@ -90,7 +92,7 @@ TOKEN_GT:	EQU $012a
 
 TOKEN_FUNC:	EQU $012b
 
-TOKEN_AT:	EQU $0147
+TOKEN_AT:	EQU $0148
 
 	;
 	; Error numbers.
@@ -344,10 +346,7 @@ main_loop:
 	CALL bas_restore_cursor
 	CMPI #KEY.ENTER,R0
 	BNE @@1
-	MVII #BAS_CR,R0
-	CALL bas_output
-	MVII #BAS_LF,R0
-	CALL bas_output
+	CALL bas_output_newline
 	MVI bas_firstpos,R4
 	CALL bas_tokenize
 	MVI basic_buffer+0,R0
@@ -545,7 +544,8 @@ keywords:
 	DECLE "ATN",0
 	DECLE "TIMER",0
 
-	DECLE "AT",0	; $0147 Must be after ATN
+	DECLE "FRE",0	; $0147
+	DECLE "AT",0	; $0148 Must be after ATN
 	DECLE 0
 
 	;
@@ -554,7 +554,7 @@ keywords:
 at_line:
 	DECLE " at ",0
 errors:
-	DECLE "ECS extended BASIC",$0d,$0a,"by nanochess 2025",0
+	DECLE "ECS extended BASIC",$0d,$0a,"(c)2025 nanochess",0
 	DECLE "Syntax error",0
 	DECLE "STOP",0
 	DECLE "Undefined",0
@@ -620,10 +620,7 @@ bas_get_line:	PROC
 @@1:	PSHR R4
 	CLRR R0
 	MVO@ R0,R4
-	MVII #BAS_CR,R0
-	CALL bas_output
-	MVII #BAS_LF,R0
-	CALL bas_output
+	CALL bas_output_newline
 	MVII #basic_buffer,R4
 	PULR R5
 	PULR PC
@@ -776,10 +773,7 @@ bas_error:	PROC
 	MVI bas_curline,R0
 	CALL PRNUM16.l
 @@4:
-	MVII #BAS_CR,R0
-	CALL bas_output
-	MVII #BAS_LF,R0
-	CALL bas_output
+	CALL bas_output_newline
 	B basic_restart
 	ENDP
 
@@ -1125,10 +1119,7 @@ bas_list:	PROC
 	B @@4
 
 @@3:	PSHR R4
-	MVII #BAS_CR,R0
-	CALL bas_output
-	MVII #BAS_LF,R0
-	CALL bas_output
+	CALL bas_output_newline
 	PULR R4
 	B @@1
 
@@ -1289,10 +1280,7 @@ bas_print:	PROC
 @@6:
 	DECR R4
 	PSHR R4
-	MVII #BAS_CR,R0
-	CALL bas_output
-	MVII #BAS_LF,R0
-	CALL bas_output
+	CALL bas_output_newline
 	PULR R4
 	PULR PC
 @@4:
@@ -1999,7 +1987,8 @@ bas_read:	PROC
 	BEQ @@3
 
 	; Number identified.
-@@3:	CALL parse_number
+@@3:	DECR R4
+	CALL fpparse
 	PULR R5
 	MVO@ R0,R5	; Save into variable
 	MVO@ R1,R5
@@ -3118,7 +3107,7 @@ bas_expr7:	PROC
 	
 	CMPI #TOKEN_FUNC,R0
 	BNC @@6
-	CMPI #TOKEN_FUNC+28,R0
+	CMPI #TOKEN_FUNC+29,R0
 	BC @@2		; Syntax error.
 	MVII #@@0-TOKEN_FUNC,R1
 	ADDR R0,R1
@@ -3159,10 +3148,13 @@ bas_expr7:	PROC
 	DECLE @@ATN
 	DECLE @@TIMER
 
+	DECLE @@FRE
+
 @@RND:
 	PSHR R4
 	CALL fprnd
 	PULR R4
+@@generic_copy:
 	MOVR R0,R2
 	MOVR R1,R3
 	CLRC
@@ -3171,105 +3163,82 @@ bas_expr7:	PROC
 	CALL bas_expr_paren
 	BC bas_type_err
 	CALL fpint
-	MOVR R0,R2
-	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@generic_copy
 @@SGN:
 	CALL bas_expr_paren
 	BC bas_type_err
 	CALL fpsgn
-	MOVR R0,R2
-	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@generic_copy
 @@ABS:
 	CALL bas_expr_paren
 	BC bas_type_err
 	CALL fpabs
-	MOVR R0,R2
-	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@generic_copy
 @@SIN:
 	CALL bas_expr_paren
 	BC bas_type_err
 	PSHR R4
 	CALL fpsin
 	PULR R4
-	MOVR R0,R2
-	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@generic_copy
 @@COS:
 	CALL bas_expr_paren
 	BC bas_type_err
 	PSHR R4
 	CALL fpcos
 	PULR R4
-	MOVR R0,R2
-	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@generic_copy
 @@TAN:
 	CALL bas_expr_paren
 	BC bas_type_err
 	PSHR R4
 	CALL fptan
 	PULR R4
-	MOVR R0,R2
-	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@generic_copy
 @@LOG:
 	CALL bas_expr_paren
 	BC bas_type_err
 	PSHR R4
 	CALL fpln
 	PULR R4
-	MOVR R0,R2
-	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@generic_copy
 @@EXP:
 	CALL bas_expr_paren
 	BC bas_type_err
 	PSHR R4
 	CALL fpexp
 	PULR R4
-	MOVR R0,R2
-	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@generic_copy
 @@SQR:
 	CALL bas_expr_paren
 	BC bas_type_err
 	PSHR R4
 	CALL fpsqrt
 	PULR R4
-	MOVR R0,R2
-	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@generic_copy
 @@ATN:
 	CALL bas_expr_paren
 	BC bas_type_err
 	PSHR R4
 	CALL fparctan
 	PULR R4
-	MOVR R0,R2
-	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@generic_copy
 
 @@TIMER:
 	MVI _frame+1,R0
 	MVI _frame,R1
 	CALL fpfromuint24
-	MOVR R0,R2
-	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@generic_copy
+
+@@FRE:
+	CALL bas_expr_paren
+	BC bas_type_err
+	MVI bas_strptr,R0
+	MVI bas_last_array,R1
+	INCR R1
+	SUBR R1,R0
+	CALL fpfromint
+	B @@generic_copy
 
 @@STICK:
 	CALL bas_expr_paren
@@ -3585,7 +3554,8 @@ bas_expr7:	PROC
 	MVO@ R0,R5
 	MOVR R3,R4
 	CALL get_next
-	CALL parse_number
+	DECR R4
+	CALL fpparse
 	MOVR R0,R2
 	MOVR R1,R3
 	PULR R4
@@ -3774,7 +3744,8 @@ bas_expr7:	PROC
 	CMPI #$3A,R0
 	BC @@2
 @@11:
-	CALL parse_number
+	DECR R4
+	CALL fpparse
 	MOVR R0,R2
 	MOVR R1,R3
 	CLRC
@@ -3810,43 +3781,6 @@ parse_integer:	PROC
 	MOVR R5,PC
 	ENDP
 
-parse_number:	PROC
-	PSHR R5
-	CLRR R2
-	CMPI #$2D,R0
-	BNE @@1
-	MVII #1,R3
-	B @@2
-
-@@1:	CLRR R3
-@@4:
-	SUBI #$30,R0
-	MOVR R2,R1
-	SLL R2,2
-	ADDR R1,R2
-	ADDR R2,R2
-	ADDR R0,R2
-@@2:	MVI@ R4,R0
-	CMPI #$30,R0
-	BNC @@3
-	CMPI #$3A,R0
-	BC @@3
-	B @@4
-@@3:
-	DECR R4
-	PSHR R4
-	PSHR R3
-	MOVR R2,R0
-	CALL fpfromuint
-	PULR R3
-	TSTR R3
-	BEQ @@5
-	CALL fpneg
-@@5:
-	PULR R4
-	PULR PC
-	ENDP
-
 	;
 	; Get string address.
 	; Input:
@@ -3856,8 +3790,7 @@ parse_number:	PROC
 	;
 get_string_addr:	PROC
 @@0:	PSHR R5
-	SUBI #$41,R0
-	MVII #strings,R5
+	MVII #strings-$41,R5
 	ADDR R0,R5
 	PULR PC
 	ENDP
@@ -4129,6 +4062,18 @@ bas_restore_cursor:	PROC
 	MVI bas_ttypos,R4
 	MVO@ R1,R4
 	MOVR R5,PC
+	ENDP
+
+	;
+	; Output a new line
+	;
+bas_output_newline:	PROC
+	PSHR R5
+	MVII #BAS_CR,R0
+	CALL bas_output
+	MVII #BAS_LF,R0
+	CALL bas_output
+	PULR PC
 	ENDP
 
 	;

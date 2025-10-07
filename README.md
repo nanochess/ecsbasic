@@ -20,7 +20,6 @@ The resulting value of this benchmark is meaningless, because the calculations e
 
 My current roadmap:
 
-* Add support for floating-point number input.
 * Research how to save/load programs via the cassette interface, or alternatively use the JLP Flash memory capability.
 
 There are 26 variables (A-Z), 26 string variables (A$-Z$), and 26 arrays (A-Z) requiring DIM first to declare them.
@@ -141,6 +140,7 @@ The following expression operators are supported:
     SQR(expr)
     ATN(expr)
     TIMER
+    FRE(expr)
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings.
 

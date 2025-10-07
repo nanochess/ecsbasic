@@ -414,6 +414,7 @@ fpfromint:	PROC
 	; Input: R0 = unsigned value.
 	; Output: R0,R1 = Floating-point value.
 	;
+    IF 0
 fpfromuint:	PROC
 	PSHR R5
 	TSTR R0
@@ -433,6 +434,7 @@ fpfromuint:	PROC
 
 @@2:	PULR PC
 	ENDP
+    ENDI
 
 	;
 	; Convert long unsigned integer to floating-point
