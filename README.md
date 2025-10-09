@@ -168,9 +168,13 @@ A small game in this flavor of BASIC:
     110 IF c>=11 AND c<=15 THEN IF x>0 THEN x=x-4
     120 IF w=0 THEN SOUND 2,,0:IF STRIG(0) THEN v=x:w=88
     130 t=t+5:IF t>=160 THEN t=0:u=INT(RND*32)+8
-    140 IF w THEN SOUND 2,w+20,12:w=w-4:IF ABS(w-u)<8 AND ABS(v-t)<8 THEN t=164:w=0:SOUND 3,8000,9:SOUND 1,2048,48
-    150 GOTO 60
+    140 IF W=0 THEN GOTO 60
+    150 SOUND 2,W+20,12:W=W-4
+    160 IF ABS(w-u)<8 AND ABS(v-t)<8 THEN t=164:w=0:SOUND 3,8000,9:SOUND 1,2048,48
+    170 GOTO 60
 
+This game can be loaded using the jzintv emulator and the provided _tape_UFO.ecs_ file.
+ 
 ## Cassette and printer support
 
 The LOAD, SAVE, and VERIFY statements are working in emulation. Filenames are four characters (just to keep an small compatibility with the ECS tape format, and because the jzintv emulator can separate different files in the main directory)
