@@ -18,10 +18,6 @@ The same program for the Mattel ECS BASIC takes 210 seconds:
 
 The resulting value of this benchmark is meaningless, because the calculations exceed completely the floating-point precision.
 
-My current roadmap:
-
-* Research how to save/load programs via the cassette interface, or alternatively use the JLP Flash memory capability.
-
 There are 26 variables (A-Z), 26 string variables (A$-Z$), and 26 arrays (A-Z) requiring DIM first to declare them.
 
 The floating-point support is 32 bits (25-bit mantissa, 7-bit exponent, and sign bit). Number input and output support scientific notation.
@@ -32,9 +28,13 @@ The following statements are supported:
     LIST line
     LIST line-
     LIST line-line
+    LLIST
     RUN
     RUN line
     NEW
+    LOAD "file"
+    SAVE "file"
+    VERIFY "file"
     REM comment
     DIM a(length)
     v = expr
@@ -47,6 +47,7 @@ The following statements are supported:
     INPUT v$
     INPUT "string";v
     INPUT "string";v$
+    LPRINT
     PRINT expr
     PRINT expr$
     PRINT "string"
@@ -165,3 +166,12 @@ A small game in this flavor of BASIC:
     130 t=t+5:IF t>=160 THEN t=0:u=INT(RND*32)+8
     140 IF w THEN SOUND 2,w+20,12:w=w-4:IF ABS(w-u)<8 AND ABS(v-t)<8 THEN t=164:w=0:SOUND 3,8000,9:SOUND 1,2048,48
     150 GOTO 60
+
+## Cassette and printer support
+
+The LOAD, SAVE, and VERIFY statements are working in emulation. Filenames are four characters (just to keep an small compatibility with the ECS tape format, and because the jzintv emulator can separate different files in the main directory)
+
+The LPRINT, and LLIST statements haven´t been verified yet in emulation, because jzintv has a bug.
+
+All five statements are yet to be tested in real hardware.
+

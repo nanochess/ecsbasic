@@ -31,6 +31,9 @@
 	;                             operator. Added PLOT. Added PRINT AT and TIMER.
 	; Revision date: Oct/06/2025. Added floating-point number parsing (now can be avoided
 	;                             doing 31416 / 10000). Added FRE operator.
+	; Revision date: Oct/08/2025. Moved tokens back to range $0080 to ease saving and
+	;                             loading programs into cassette. Added LLIST and LPRINT.
+	;                             Added SAVE, LOAD, and VERIFY.
 	;
 
 	;
@@ -66,33 +69,36 @@ STRING_TRASH:	EQU $CAFE
 	;
 	; Token definitions needed for comparisons inside the interpreter.
 	;
-TOKEN_START:	EQU $0100
-TOKEN_COLON:	EQU $0100
-TOKEN_GOTO:	EQU $0108
-TOKEN_IF:	EQU $0109
-TOKEN_THEN:	EQU $010a
-TOKEN_ELSE:	EQU $010b
-TOKEN_TO:	EQU $010d
-TOKEN_STEP:	EQU $010e
-TOKEN_GOSUB:	EQU $0110
+TOKEN_START:	EQU $0080
 
-TOKEN_DATA:	EQU $0115
+TOKEN_COLON:	EQU TOKEN_START+$00
+TOKEN_GOTO:	EQU TOKEN_START+$08
+TOKEN_IF:	EQU TOKEN_START+$09
+TOKEN_THEN:	EQU TOKEN_START+$0a
+TOKEN_ELSE:	EQU TOKEN_START+$0b
+TOKEN_TO:	EQU TOKEN_START+$0d
+TOKEN_STEP:	EQU TOKEN_START+$0e
+TOKEN_GOSUB:	EQU TOKEN_START+$10
 
-TOKEN_AND:	EQU $0121
-TOKEN_NOT:	EQU $0122
-TOKEN_OR:	EQU $0123
-TOKEN_XOR:	EQU $0124
+TOKEN_DATA:	EQU TOKEN_START+$15
 
-TOKEN_LE:	EQU $0125
-TOKEN_GE:	EQU $0126
-TOKEN_NE:	EQU $0127
-TOKEN_EQ:	EQU $0128
-TOKEN_LT:	EQU $0129
-TOKEN_GT:	EQU $012a
+TOKEN_AND:	EQU TOKEN_START+$30
+TOKEN_NOT:	EQU TOKEN_START+$31
+TOKEN_OR:	EQU TOKEN_START+$32
+TOKEN_XOR:	EQU TOKEN_START+$33
 
-TOKEN_FUNC:	EQU $012b
+TOKEN_LE:	EQU TOKEN_START+$34
+TOKEN_GE:	EQU TOKEN_START+$35
+TOKEN_NE:	EQU TOKEN_START+$36
+TOKEN_EQ:	EQU TOKEN_START+$37
+TOKEN_LT:	EQU TOKEN_START+$38
+TOKEN_GT:	EQU TOKEN_START+$39
 
-TOKEN_AT:	EQU $0148
+TOKEN_FUNC:	EQU TOKEN_START+$3a
+
+TOKEN_SPC:	EQU TOKEN_START+$57
+TOKEN_TAB:	EQU TOKEN_START+$58
+TOKEN_AT:	EQU TOKEN_START+$59
 
 	;
 	; Error numbers.
@@ -112,6 +118,9 @@ ERR_ARRAY:	EQU 11
 ERR_BOUNDS:	EQU 12
 ERR_TYPE:	EQU 13
 ERR_TOOBIG:	EQU 14
+ERR_NODATA:	EQU 15
+ERR_NOFILE:	EQU 16
+ERR_MISMATCH:	EQU 17
 
 KEY.LEFT    EQU     $1C     ; \   Can't be generated otherwise, so perfect
 KEY.RIGHT   EQU     $1D     ;  |_ candidates.  Could alternately send 8 for
@@ -286,6 +295,8 @@ _ecs1:
 	MVO R0,$01f8
 	MVO R0,$00f8
 
+	CALL printer_reset
+
 	MVII #1,R0
 	MVO R0,_border_color
 	MVII #$07,R0
@@ -324,7 +335,7 @@ basic_restart:
 	MVO@ R0,R4
 	MVII #2,R0
 	MVO@ R0,R4
-	MVII #$0102,R0	; CLS Currently
+	MVII #TOKEN_START+$03,R0	; CLS Currently
 	MVO@ R0,R4
 	CLRR R0
 	MVO@ R0,R4
@@ -386,39 +397,54 @@ main_loop:
 	; Table of statements' addresses.
 	;
 keywords_exec:
-	DECLE $0000	; Colon
+	DECLE $0000		; Colon
 	DECLE bas_list
 	DECLE bas_new
 	DECLE bas_cls
-	DECLE bas_run
+	DECLE bas_run		; $04
 	DECLE bas_stop
 	DECLE bas_print
 	DECLE bas_input
-	DECLE bas_goto
+	DECLE bas_goto		; $08
 	DECLE bas_if
 	DECLE bas_syntax_error
 	DECLE bas_syntax_error
-	DECLE bas_for		; FOR
+	DECLE bas_for		; $0c FOR
 	DECLE bas_syntax_error
 	DECLE bas_syntax_error
 	DECLE bas_next		; NEXT
-	DECLE bas_gosub
+	DECLE bas_gosub		; $10
 	DECLE bas_return
 	DECLE bas_rem
 	DECLE bas_restore
-	DECLE bas_read
+	DECLE bas_read		; $14
 	DECLE bas_data
 	DECLE bas_dim
 	DECLE bas_mode
-	DECLE bas_color
+	DECLE bas_color		; $18
 	DECLE bas_define
 	DECLE bas_sprite
 	DECLE bas_wait
-	DECLE bas_sound	
+	DECLE bas_sound		; $1c	
 	DECLE bas_border
 	DECLE bas_poke
 	DECLE bas_on
-	DECLE bas_plot
+	DECLE bas_plot		; $20
+	DECLE bas_load		; LOAD
+	DECLE bas_save		; SAVE
+	DECLE bas_verify	; VERIFY
+	DECLE bas_syntax_error	; $24
+	DECLE bas_llist		; LLIST
+	DECLE bas_lprint	; LPRINT
+	DECLE bas_syntax_error
+	DECLE bas_syntax_error	; $28
+	DECLE bas_syntax_error
+	DECLE bas_syntax_error
+	DECLE bas_syntax_error
+	DECLE bas_syntax_error	; $2c
+	DECLE bas_syntax_error
+	DECLE bas_syntax_error
+	DECLE bas_syntax_error
 
 	; Operators and BASIC functions cannot be executed directly
 	DECLE bas_syntax_error	; AND
@@ -459,57 +485,74 @@ keywords_exec:
 	DECLE bas_syntax_error	; SQR
 	DECLE bas_syntax_error	; ATN
 	DECLE bas_syntax_error	; TIMER
+	DECLE bas_syntax_error	; SPC
+	DECLE bas_syntax_error	; TAB
 	DECLE bas_syntax_error	; AT
 
 	;
 	; BASIC keywords.
 	; 
 keywords:
-	DECLE ":",0	; $0100
+	DECLE ":",0	; $00
 	DECLE "LIST",0
 	DECLE "NEW",0
 	DECLE "CLS",0
-	DECLE "RUN",0	; $0104
+	DECLE "RUN",0	; $04
 	DECLE "STOP",0
 	DECLE "PRINT",0
 	DECLE "INPUT",0
-	DECLE "GOTO",0	; $0108
+	DECLE "GOTO",0	; $08
 	DECLE "IF",0
 	DECLE "THEN",0
 	DECLE "ELSE",0
-	DECLE "FOR",0	; $010C
+	DECLE "FOR",0	; $0C
 	DECLE "TO",0
 	DECLE "STEP",0
 	DECLE "NEXT",0
-	DECLE "GOSUB",0	; $0110
+	DECLE "GOSUB",0	; $10
 	DECLE "RETURN",0
 	DECLE "REM",0
 	DECLE "RESTORE",0
-	DECLE "READ",0	; $0114
+	DECLE "READ",0	; $14
 	DECLE "DATA",0
 	DECLE "DIM",0
 	DECLE "MODE",0	
-	DECLE "COLOR",0	; $0118
+	DECLE "COLOR",0	; $18
 	DECLE "DEFINE",0
 	DECLE "SPRITE",0
 	DECLE "WAIT",0
-	DECLE "SOUND",0	; $011C
+	DECLE "SOUND",0	; $1C
 	DECLE "BORDER",0
 	DECLE "POKE",0	
 	DECLE "ON",0
-	DECLE "PLOT",0	; $0120
+	DECLE "PLOT",0	; $20
+	DECLE "LOAD",0
+	DECLE "SAVE",0
+	DECLE "VERIFY",0
+	DECLE "PLACEHOLDER0",0	; $24
+	DECLE "LLIST",0	
+	DECLE "LPRINT",0
+	DECLE "PLACEHOLDER1",0
+	DECLE "PLACEHOLDER2",0	; $28
+	DECLE "PLACEHOLDER3",0
+	DECLE "PLACEHOLDER4",0
+	DECLE "PLACEHOLDER5",0
+	DECLE "PLACEHOLDER6",0	; $2C
+	DECLE "PLACEHOLDER7",0
+	DECLE "PLACEHOLDER8",0
+	DECLE "PLACEHOLDER9",0
 
-	DECLE "AND",0	; $0121
+	DECLE "AND",0	; $30
 	DECLE "NOT",0
 	DECLE "OR",0
 	DECLE "XOR",0
-	DECLE "<=",0	; $0125
+	DECLE "<=",0	; $34
 	DECLE ">=",0
 	DECLE "<>",0
 	DECLE "=",0
 	DECLE "<",0
 	DECLE ">",0
-	DECLE "INT",0	; $012b
+	DECLE "INT",0	; $3A
 	DECLE "ABS",0
 	DECLE "SGN",0
 	DECLE "RND",0
@@ -529,7 +572,7 @@ keywords:
 	DECLE "MID$",0
 	DECLE "RIGHT$",0
 
-	DECLE "VAL",0	; $013B
+	DECLE "VAL",0	; $4A
 	DECLE "INKEY$",0
 	DECLE "STR$",0
 	DECLE "INSTR",0
@@ -539,13 +582,15 @@ keywords:
 	DECLE "TAN",0
 	DECLE "LOG",0
 
-	DECLE "EXP",0	; $0143
+	DECLE "EXP",0	; $52
 	DECLE "SQR",0
 	DECLE "ATN",0
 	DECLE "TIMER",0
 
-	DECLE "FRE",0	; $0147
-	DECLE "AT",0	; $0148 Must be after ATN
+	DECLE "FRE",0	; $56
+	DECLE "SPC",0	; $57
+	DECLE "TAB",0	; $58
+	DECLE "AT",0	; $59 Must be after ATN
 	DECLE 0
 
 	;
@@ -569,6 +614,9 @@ errors:
 	DECLE "Out of bounds",0
 	DECLE "Type error",0
 	DECLE "Line too big",0
+	DECLE "No header found",0
+	DECLE "File not found",0
+	DECLE "Verify error",0
 	
 	;
 	; Read a line from the input
@@ -770,6 +818,8 @@ bas_error:	PROC
 	PULR R4
 	B @@5
 @@6:
+	MVII #bas_output,R2
+	MVO R2,bas_func
 	MVI bas_curline,R0
 	CALL PRNUM16.l
 @@4:
@@ -1034,6 +1084,24 @@ bas_execute:	PROC
 	; List the program
 	;
 bas_list:	PROC
+	MVII #bas_output,R2
+	MVO R2,bas_func
+	B bas_generic_list
+	ENDP
+
+	;
+	; LLIST
+	;
+bas_llist:	PROC
+	MVII #printer_output,R2
+	MVO R2,bas_func
+	B bas_generic_list
+	ENDP
+
+	;
+	; List the program
+	;
+bas_generic_list:	PROC
 	PSHR R5
 	CALL get_next	; Check for line number.
 	CMPI #$30,R0
@@ -1083,7 +1151,7 @@ bas_list:	PROC
 	PSHR R4
 	CALL PRNUM16.l
 	MVII #$20,R0	; Space.
-	CALL bas_output
+	CALL indirect_output
 	PULR R4
 	MVI@ R4,R1	; Tokenized length.
 @@4:
@@ -1093,7 +1161,7 @@ bas_list:	PROC
 	CMPI #TOKEN_START,R0
 	BC @@5
 	PSHR R4
-	CALL bas_output
+	CALL indirect_output
 	PULR R4
 	B @@4
 
@@ -1111,7 +1179,7 @@ bas_list:	PROC
 	TSTR R0
 	BEQ @@9
 	PSHR R5
-	CALL bas_output
+	CALL indirect_output
 	PULR R5
 	B @@8
 
@@ -1119,7 +1187,10 @@ bas_list:	PROC
 	B @@4
 
 @@3:	PSHR R4
-	CALL bas_output_newline
+	MVII #BAS_CR,R0
+	CALL indirect_output
+	MVII #BAS_LF,R0
+	CALL indirect_output
 	PULR R4
 	B @@1
 
@@ -1241,6 +1312,21 @@ bas_stop:	PROC
 	; PRINT
 	;
 bas_print:	PROC
+	MVII #bas_output,R2
+	MVO R2,bas_func
+	B bas_generic_print
+	ENDP
+
+	;
+	; LPRINT
+	;
+bas_lprint:	PROC
+	MVII #printer_output,R2
+	MVO R2,bas_func
+	B bas_generic_print
+	ENDP
+
+bas_generic_print:	PROC
 	PSHR R5
 	CALL get_next
 	CMPI #TOKEN_AT,R0
@@ -1266,7 +1352,7 @@ bas_print:	PROC
 	CMPI #$22,R0
 	BEQ @@3
 	PSHR R4
-	CALL bas_output
+	CALL indirect_output
 	PULR R4
 	B @@1
 	
@@ -1280,7 +1366,10 @@ bas_print:	PROC
 @@6:
 	DECR R4
 	PSHR R4
-	CALL bas_output_newline
+	MVII #BAS_CR,R0
+	CALL indirect_output
+	MVII #BAS_LF,R0
+	CALL indirect_output
 	PULR R4
 	PULR PC
 @@4:
@@ -1296,8 +1385,6 @@ bas_print:	PROC
 	PSHR R4
 	MOVR R2,R0
 	MOVR R3,R1
-	MVII #bas_output,R2
-	MVO R2,bas_func
 	CALL fpprint
 	PULR R4
 	B @@3
@@ -1314,7 +1401,7 @@ bas_print:	PROC
 	PSHR R0
 	PSHR R3
 	MVI@ R3,R0
-	CALL bas_output
+	CALL indirect_output
 	PULR R3
 	PULR R0
 	INCR R3
@@ -2636,6 +2723,174 @@ bas_bk:	PROC
 
 @@2:	MVII #ERR_SYNTAX,R0
 	CALL bas_error
+	ENDP
+
+	;
+	; Read a filename.
+	;
+bas_filename:	PROC
+	PSHR R5
+	MVII #_filename,R5
+	MVII #$20,R0
+	MVO@ R0,R5
+	MVO@ R0,R5
+	MVO@ R0,R5
+	MVO@ R0,R5
+	MVII #_filename,R3
+
+	CALL get_next
+	CMPI #$22,R0
+	BNE @@1
+@@2:
+	MVI@ R4,R0
+	CMPI #$22,R0
+	BEQ @@3
+	CMPI #_filename+4,R3
+	BEQ @@2
+	CMPI #$61,R0
+	BNC @@4
+	CMPI #$7B,R0
+	BC @@4
+	SUBI #$20,R0
+@@4:	MVO@ R0,R3
+	INCR R3
+	B @@2
+
+	; Copy the filename here.
+	; The jzintv emulator uses it to create files in the main directory.
+@@3:	MVII #_filename,R4
+	MVII #$4080,R1
+	MVII #$40FA,R2
+	MVII #4,R3
+@@5:	MVI@ R4,R0
+	MVO@ R0,R1
+	MVO@ R0,R2
+	INCR R1
+	INCR R2
+	DECR R3
+	BNE @@5
+	PULR PC
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+	ENDP
+
+	;
+	; Load a program from tape.
+	;
+bas_load:	PROC
+	CALL bas_filename
+	CALL new_program
+	CALL cassette_init
+	CALL cassette_load
+	CMPI #1,R0
+	BEQ @@1
+	CMPI #2,R0
+	BEQ @@2
+	MVII #program_start,R4
+@@3:	CALL cassette_read_word
+	MVO@ R0,R4
+	TSTR R0
+	BEQ @@0
+	CALL cassette_read_word
+	MVO@ R0,R4
+	MOVR R0,R2
+@@4:	CALL cassette_read
+	MVO@ R0,R4
+	DECR R2
+	BNE @@4
+	B @@3
+
+@@0:	DECR R4
+	MVO R4,program_end
+	CALL restart_pointers
+	CALL cassette_stop
+	; Program read completely.
+	B basic_restart
+
+	; Header not found
+@@1:	CALL cassette_stop
+	MVII #ERR_NODATA,R0
+	CALL bas_error
+
+	; File not found
+@@2:	CALL cassette_stop
+	MVII #ERR_NOFILE,R0
+	CALL bas_error
+	ENDP
+
+	;
+	; Save a program to tape.
+	;
+bas_save:	PROC
+	CALL bas_filename
+	CALL cassette_init
+	CALL cassette_save
+	MVII #program_start,R4
+@@1:	MVI@ R4,R0
+	CALL cassette_write_word
+	TSTR R0
+	BEQ @@2
+	MVI@ R4,R0
+	CALL cassette_write_word
+	MOVR R0,R2
+@@3:	MVI@ R4,R0
+	CALL cassette_write
+	DECR R2
+	BNE @@3
+	B @@1
+
+@@2:	CALL cassette_stop
+	B basic_restart
+	ENDP
+
+	;
+	; Verify a program from tape.
+	;
+bas_verify:	PROC
+	CALL bas_filename
+	CALL cassette_init
+	CALL cassette_load
+	CMPI #1,R0
+	BEQ @@1
+	CMPI #2,R0
+	BEQ @@2
+	MVII #program_start,R4
+@@3:	CALL cassette_read_word
+	CMP@ R4,R0
+	BNE @@5
+	TSTR R0
+	BEQ @@0
+	CALL cassette_read_word
+	CMP@ R4,R0
+	BNE @@5
+	MOVR R0,R2
+@@4:	CALL cassette_read
+	CMP@ R4,R0
+	BNE @@5
+	DECR R2
+	BNE @@4
+	B @@3
+
+@@0:	CALL cassette_stop
+	; Program verified completely
+	B basic_restart
+
+	; Header not found
+@@1:	CALL cassette_stop
+	MVII #ERR_NODATA,R0
+	CALL bas_error
+
+	; File not found
+@@2:	CALL cassette_stop
+	MVII #ERR_NOFILE,R0
+	CALL bas_error
+
+	; Mismatch
+@@5:	CALL cassette_stop
+	MVII #ERR_MISMATCH,R0
+	CALL bas_error
+
 	ENDP
 
 	;
@@ -4064,6 +4319,10 @@ bas_restore_cursor:	PROC
 	MOVR R5,PC
 	ENDP
 
+indirect_output:	PROC
+	MVI bas_func,R7
+	ENDP
+
 	;
 	; Output a new line
 	;
@@ -4370,7 +4629,7 @@ PRNUM16:	PROC
 @@2:	INCR R2
 	PSHR R2
 	MOVR R3,R0
-	CALL bas_output
+	CALL indirect_output
 	PULR R2
 @@3:	PULR R0
 	PULR PC
@@ -4520,9 +4779,12 @@ _int_vector:     PROC
 	RETURN
 	ENDP
 
+	ORG $D000
+
 	INCLUDE "fplib.asm"
 	INCLUDE "fpio.asm"
 	INCLUDE "fpmath.asm"
+	INCLUDE "uart.asm"
 
 	ORG $320,$320,"-RWB"
 _frame:		RMB 2   ; Current frame number.
@@ -4553,6 +4815,7 @@ program_end:	RMB 1	; Pointer to program's end.
 lfsr:		RMB 1	; Random number
 _mode_color:	RMB 1	; Colors for Color Stack mode.
 _gram_bitmap:	RMB 1	; Pointer to bitmap for GRAM.
+_timeout:	RMB 1	;
 
 SCRATCH:    ORG $100,$100,"-RWBN"
 	;
@@ -4568,3 +4831,5 @@ _gram_target:	RMB 1	; Target GRAM card.
 _gram_total:	RMB 1	; Total of GRAM cards.
 ECS_KEY_LAST:	RMB 1	; ECS last key pressed.
 temp1:		RMB 1	; Temporary value.
+_filename:	RMB 4	; File name.
+

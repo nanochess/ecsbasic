@@ -19,9 +19,9 @@ fpprint:	PROC
 	ANDI #$7F,R2	; Special case: Is it zero?
 	BNE @@14
 	MVII #$20,R0
-	CALL @@output
+	CALL indirect_output
 	MVII #$30,R0
-	CALL @@output
+	CALL indirect_output
 	PULR PC
 @@14:
 	MOVR R1,R2
@@ -33,7 +33,7 @@ fpprint:	PROC
 @@7:	PSHR R0
 	PSHR R1
 	MOVR R3,R0
-	CALL @@output
+	CALL indirect_output
 	PULR R1
 	PULR R0
 	PSHR R0
@@ -133,7 +133,7 @@ fpprint:	PROC
 @@8:
 	PSHR R0
 	MVII #$2E,R0
-	CALL @@output
+	CALL indirect_output
 	PULR R1
 	CLRR R0
 	CLRR R2
@@ -171,9 +171,9 @@ fpprint:	PROC
 	PULR R0
 	CALL @@exponent
 	MVII #$45,R0
-	CALL @@output
+	CALL indirect_output
 	MVII #$2D,R0
-	CALL @@output
+	CALL indirect_output
 	PULR R0
 	CALL PRNUM16.l
 	PULR PC
@@ -205,9 +205,9 @@ fpprint:	PROC
 	PULR R0
 	CALL @@exponent
 	MVII #$45,R0
-	CALL @@output
+	CALL indirect_output
 	MVII #$2b,R0
-	CALL @@output
+	CALL indirect_output
 	PULR R0
 	CALL PRNUM16.l
 @@0:
@@ -237,7 +237,7 @@ fpprint:	PROC
 	PSHR R0
 	PSHR R1
 	MVII #$2E,R0
-	CALL @@output
+	CALL indirect_output
 	PULR R1
 	PULR R0
 	MVII #$0001,R2
@@ -280,16 +280,13 @@ fpprint:	PROC
 	PSHR R3
 	PSHR R4
 	MOVR R5,R0
-	CALL @@output
+	CALL indirect_output
 	PULR R4
 	PULR R3
 	PULR R2
 	PULR R1
 	PULR R0
 @@d3:	PULR PC
-
-@@output:
-	MVI bas_func,R7
 
 	ENDP
 
