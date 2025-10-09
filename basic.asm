@@ -364,6 +364,9 @@ main_loop:
 	MVI basic_buffer+0,R0
 	TSTR R0		; Line number found?
 	BNE @@2		; Yes, jump.
+	MVI basic_buffer+1,R0
+	CMPI #1,R0	; Empty line.
+	BEQ main_loop
 	MVII #basic_buffer,R4
 	MVII #$FFFF,R0	; So it is executed.
 	MVO@ R0,R4
@@ -486,6 +489,9 @@ keywords_exec:
 	DECLE bas_syntax_error	; SQR
 	DECLE bas_syntax_error	; ATN
 	DECLE bas_syntax_error	; TIMER
+	DECLE bas_syntax_error	; FRE
+	DECLE bas_syntax_error	; POS
+	DECLE bas_syntax_error	; LPOS
 	DECLE bas_syntax_error	; SPC
 	DECLE bas_syntax_error	; TAB
 	DECLE bas_syntax_error	; AT
