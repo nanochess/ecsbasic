@@ -33,7 +33,8 @@
 	;                             doing 31416 / 10000). Added FRE operator.
 	; Revision date: Oct/08/2025. Moved tokens back to range $0080 to ease saving and
 	;                             loading programs into cassette. Added LLIST and LPRINT.
-	;                             Added SAVE, LOAD, and VERIFY.
+	;                             Added SAVE, LOAD, and VERIFY. Added SPC, TAB, POS, and
+	;                             LPOS.
 	;
 
 	;
@@ -96,9 +97,9 @@ TOKEN_GT:	EQU TOKEN_START+$39
 
 TOKEN_FUNC:	EQU TOKEN_START+$3a
 
-TOKEN_SPC:	EQU TOKEN_START+$57
-TOKEN_TAB:	EQU TOKEN_START+$58
-TOKEN_AT:	EQU TOKEN_START+$59
+TOKEN_SPC:	EQU TOKEN_START+$59
+TOKEN_TAB:	EQU TOKEN_START+$5a
+TOKEN_AT:	EQU TOKEN_START+$5b
 
 	;
 	; Error numbers.
@@ -588,9 +589,11 @@ keywords:
 	DECLE "TIMER",0
 
 	DECLE "FRE",0	; $56
-	DECLE "SPC",0	; $57
-	DECLE "TAB",0	; $58
-	DECLE "AT",0	; $59 Must be after ATN
+	DECLE "POS",0	; $57
+	DECLE "LPOS",0	; $58
+	DECLE "SPC",0	; $59
+	DECLE "TAB",0	; $5a
+	DECLE "AT",0	; $5b Must be after ATN
 	DECLE 0
 
 	;
@@ -1372,7 +1375,38 @@ bas_generic_print:	PROC
 	CALL indirect_output
 	PULR R4
 	PULR PC
-@@4:
+
+@@4:	CMPI #TOKEN_SPC,R0
+	BNE @@11
+	CALL bas_expr_paren
+	BC bas_type_err
+	CALL fp2int
+@@12:	CMPI #0,R0
+	BLE @@3
+	PSHR R4
+	PSHR R0
+	MVII #$20,R0
+	CALL indirect_output
+	PULR R0
+	PULR R4
+	DECR R0
+	B @@12
+
+@@11:	CMPI #TOKEN_TAB,R0
+	BNE @@14
+	CALL bas_expr_paren
+	BC bas_type_err
+	CALL fp2int
+	PSHR R0
+	MVII #$FFFF,R0
+	CALL indirect_output
+	INCR R0		; Column starts with 1.
+	MOVR R0,R1
+	PULR R0
+	SUBR R1,R0
+	B @@12
+
+@@14:
 	DECR R4
 	;
 	; Process expression.
@@ -3362,7 +3396,7 @@ bas_expr7:	PROC
 	
 	CMPI #TOKEN_FUNC,R0
 	BNC @@6
-	CMPI #TOKEN_FUNC+29,R0
+	CMPI #TOKEN_FUNC+31,R0
 	BC @@2		; Syntax error.
 	MVII #@@0-TOKEN_FUNC,R1
 	ADDR R0,R1
@@ -3404,6 +3438,8 @@ bas_expr7:	PROC
 	DECLE @@TIMER
 
 	DECLE @@FRE
+	DECLE @@POS
+	DECLE @@LPOS
 
 @@RND:
 	PSHR R4
@@ -3492,6 +3528,24 @@ bas_expr7:	PROC
 	MVI bas_last_array,R1
 	INCR R1
 	SUBR R1,R0
+	CALL fpfromint
+	B @@generic_copy
+
+@@POS:
+	CALL bas_expr_paren
+	BC bas_type_err
+	MVII #$FFFF,R0
+	CALL bas_output
+	INCR R0
+	CALL fpfromint
+	B @@generic_copy
+
+@@LPOS:
+	CALL bas_expr_paren
+	BC bas_type_err
+	MVII #$FFFF,R0
+	CALL printer_output
+	INCR R0
 	CALL fpfromint
 	B @@generic_copy
 
@@ -4339,6 +4393,15 @@ bas_output_newline:	PROC
 	; Output a character to the screen
 	;
 bas_output:	PROC
+	CMPI #$FFFF,R0	; Get horizontal position.
+	BNE @@19
+	MVI bas_ttypos,R0
+	SUBI #$0200,R0
+@@20:	SUBI #20,R0
+	BC @@20
+	ADDI #20,R0
+	MOVR R5,PC
+@@19:
 	PSHR R5
 	CMPI #$0100,R0	; Characters 256-511
 	BC @@18
@@ -4832,4 +4895,6 @@ _gram_total:	RMB 1	; Total of GRAM cards.
 ECS_KEY_LAST:	RMB 1	; ECS last key pressed.
 temp1:		RMB 1	; Temporary value.
 _filename:	RMB 4	; File name.
+_printer_col:	RMB 1	; Printer column.
+
 

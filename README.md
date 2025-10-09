@@ -54,6 +54,8 @@ The following statements are supported:
     PRINT "string";
     PRINT "string";expr
     PRINT "string";expr$
+    PRINT TAB(5);"string"
+    PRINT SPC(5);"string"
     PRINT AT 20;"string"
     GOSUB line
     RETURN
@@ -142,6 +144,8 @@ The following expression operators are supported:
     ATN(expr)
     TIMER
     FRE(expr)
+    POS(expr)
+    LPOS(expr)
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings.
 

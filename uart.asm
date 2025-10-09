@@ -288,12 +288,29 @@ printer_reset:	PROC
 	; Send data to the printer.
 	;
 printer_output:	PROC
+	CMPI #$FFFF,R0
+	BNE @@4
+	MVI _printer_col,R0
+	MOVR R5,PC
+@@4:
 	PSHR R5
 @@0:	CALL uart_delay
 	MVI $00E0,R1	; Read UART status.
 	ANDI #2,R1	; TX ready?
 	BEQ @@0		; No, jump.
 	MVO R0,$00E1	; Write data to UART
+
+	CMPI #$0A,R0
+	BEQ @@2
+	MVI _printer_col,R1
+	INCR R1
+	CMPI #40,R1
+	BEQ @@3
+	CMPI #$0D,R0
+	BNE @@1
+@@3:	CLRR R1
+@@1:	MVO R1,_printer_col
+@@2:
 	PULR PC
 	ENDP
 
