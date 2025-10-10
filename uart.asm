@@ -7,6 +7,7 @@
 	; https://nanochess.org/
 	;
 	; Creation date: Oct/08/2025.
+	; Revision date: Oct/10/2025. Added UART delays _after_ _every_ UART access.
 	;
 
 	;
@@ -35,6 +36,7 @@ cassette_init:	PROC
 	PSHR R5
 	MVII #$03,R0	; Reset UART.
 	MVO R0,$00E0
+	CALL uart_delay
 	MVII #10,R1
 @@1:	CALL wait_frame
 	DECR R1
@@ -47,11 +49,14 @@ cassette_init:	PROC
 	; Order is important for jzintv emulator.
 	;
 cassette_play:	PROC
+	PSHR R5
 	MVII #$1D,R0	; Start cassette motor. 300 baud, mode RX, TAPE port.
 	MVO R0,$00E2
+	CALL uart_delay
 	MVII #$1D,R0	; 8 bit, odd parity, 1 stop bit.
 	MVO R0,$00E0
-	MOVR R5,PC
+	CALL uart_delay
+	PULR PC
 	ENDP
 
 	;
@@ -62,8 +67,10 @@ cassette_record:	PROC
 	PSHR R5
 	MVII #$39,R0	; Start cassette motor. 300 baud, mode TX, TAPE port.
 	MVO R0,$00E2
+	CALL uart_delay
 	MVII #$1D,R0	; 8 bit, odd parity, 1 stop bit.
 	MVO R0,$00E0
+	CALL uart_delay
 	MVII #90,R1
 @@0:	CALL wait_frame
 	DECR R1
@@ -79,6 +86,7 @@ cassette_stop:	PROC
 	BNE @@0
 	CLRR R0		; Stop cassette motor.
 	MVO R0,$00E2	; 
+	CALL uart_delay
 	MVII #60,R1
 @@1:	CALL wait_frame
 	DECR R1
@@ -207,11 +215,12 @@ cassette_read_word:	PROC
 cassette_read:	PROC
 	PSHR R5
 @@0:
-	CALL uart_delay
 	MVI $00E0,R0
+	CALL uart_delay
 	ANDI #1,R0
 	BEQ @@0
 	MVI $00E1,R0
+	CALL uart_delay
 	PULR PC
 	ENDP
 
@@ -221,11 +230,12 @@ cassette_read_timeout:	PROC
 	MVI _timeout,R1
 	SUB _frame,R1
 	BNC @@1
-	CALL uart_delay
 	MVI $00E0,R0
+	CALL uart_delay
 	ANDI #1,R0
 	BEQ @@0
 	MVI $00E1,R0
+	CALL uart_delay
 	PULR PC
 
 @@1:	MVII #1,R0
@@ -245,11 +255,12 @@ cassette_write_word:	PROC
 cassette_write:	PROC
 	PSHR R5
 @@0:
-	CALL uart_delay
 	MVI $00E0,R1
+	CALL uart_delay
 	ANDI #2,R1
 	BEQ @@0
 	MVO R0,$00E1
+	CALL uart_delay
 	PULR PC
 	ENDP
 
@@ -278,6 +289,7 @@ printer_reset:	PROC
 ;	CALL uart_delay
 	MVII #$23,R0	; 1200 baud, mode TX/CTS, AUX port.
 	MVO R0,$00E2
+	CALL uart_delay
 	MVII #$11,R0	; 8 bits, 2 stop bits, no parity.
 	MVO R0,$00E0
 	CALL uart_delay
@@ -294,11 +306,13 @@ printer_output:	PROC
 	MOVR R5,PC
 @@4:
 	PSHR R5
-@@0:	CALL uart_delay
+@@0:	
 	MVI $00E0,R1	; Read UART status.
+	CALL uart_delay
 	ANDI #2,R1	; TX ready?
 	BEQ @@0		; No, jump.
 	MVO R0,$00E1	; Write data to UART
+	CALL uart_delay
 
 	CMPI #$0A,R0
 	BEQ @@2
