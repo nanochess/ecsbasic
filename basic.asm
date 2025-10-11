@@ -42,6 +42,7 @@
 	;                             assigned space. Solved bug where some string weren't
 	;                             cleared when doing RUN. INSTR allows syntax without
 	;                             starting index. Added function POINT(x,y) to read bloxels.
+	;                             Added HEX$.
 	;
 
 	;
@@ -606,7 +607,7 @@ keywords:
 	DECLE "LPOS",0	; $58
 	DECLE "POINT",0	; $59
 
-	DECLE "FUNC1",0	; $5a
+	DECLE "HEX$",0	; $5a
 	DECLE "FUNC2",0	; $5b
 	DECLE "FUNC3",0	; $5c
 	DECLE "FUNC4",0	; $5d
@@ -3422,7 +3423,7 @@ bas_expr7:	PROC
 	
 	CMPI #TOKEN_FUNC,R0
 	BNC @@6
-	CMPI #TOKEN_FUNC+32,R0
+	CMPI #TOKEN_FUNC+33,R0
 	BC @@2		; Syntax error.
 	MVII #@@0-TOKEN_FUNC,R1
 	ADDR R0,R1
@@ -3467,6 +3468,8 @@ bas_expr7:	PROC
 	DECLE @@POS
 	DECLE @@LPOS
 	DECLE @@POINT
+
+	DECLE @@HEX
 
 	; RND
 @@RND:
@@ -3675,6 +3678,48 @@ bas_expr7:	PROC
 	MOVR R1,R3
 	CLRC
 	PULR PC
+
+	; HEX$(expr)
+@@HEX:
+	CALL bas_expr_paren
+	BC bas_type_err
+	PSHR R4
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fp2int
+	MVII #basic_buffer+3,R3
+	CALL @@hexdigit
+	CALL @@hexdigit
+	CALL @@hexdigit
+	CALL @@hexdigit	
+	MVII #basic_buffer,R3
+	MVII #4,R1
+@@hx1:	MVI@ R3,R0
+	CMPI #$30,R0
+	BNE @@hx3
+	INCR R3
+	DECR R1
+	CMPI #1,R1
+	BNE @@hx1
+@@hx3:	MOVR R3,R0
+	CALL string_create
+	PULR R4
+	SETC
+	PULR PC
+
+@@hexdigit:
+	PSHR R0
+	ANDI #$0F,R0
+	ADDI #$30,R0
+	CMPI #$3A,R0
+	BNC @@hx2
+	ADDI #$07,R0
+@@hx2:	MVO@ R0,R3
+	DECR R3
+	PULR R0
+	SLR R0,2
+	SLR R0,2
+	MOVR R5,PC
 
 @@STICK:
 	CALL bas_expr_paren

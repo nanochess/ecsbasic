@@ -152,6 +152,7 @@ The following expression operators are supported:
     POS(expr)
     LPOS(expr)
     POINT(x,y)
+    HEX$(expr)
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings nor bidimensional arrays.
 
