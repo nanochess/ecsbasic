@@ -18,7 +18,7 @@ The same program for the Mattel ECS BASIC takes 210 seconds:
 
 The resulting value of this benchmark is meaningless, because the calculations exceed completely the floating-point precision.
 
-There are 26 variables (A-Z), 26 string variables (A$-Z$), and 26 arrays (A-Z) requiring DIM first to declare them.
+There are 26 variables (A-Z), 26 string variables (A$-Z$), and 26 unidimensional arrays (A-Z) requiring DIM first to declare them.
 
 The floating-point support is 32 bits (25-bit mantissa, 7-bit exponent, and sign bit). Number input and output support scientific notation.
 
@@ -147,7 +147,7 @@ The following expression operators are supported:
     POS(expr)
     LPOS(expr)
     
-String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings.
+String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings nor bidimensional arrays.
 
 If you get an error, you can do debugging of the program by using PRINT to see the variables, and using GOTO to re-enter a program. RUN resets all variables.
 
@@ -177,9 +177,9 @@ This game can be loaded using the jzintv emulator and the provided _tape_UFO.ecs
  
 ## Cassette and printer support
 
-The LOAD, SAVE, and VERIFY statements are working in emulation. Filenames are four characters (just to keep an small compatibility with the ECS tape format, and because the jzintv emulator can separate different files in the main directory)
+The LOAD, SAVE, and VERIFY statements are working in emulation and real hardware. Filenames are four characters (just to keep an small compatibility with the ECS tape format, and because the jzintv emulator can separate different files in the main directory)
 
 The LPRINT, and LLIST statements haven´t been verified yet in emulation, because jzintv has a bug.
 
-All five statements are yet to be tested in real hardware.
+LPRINT and LLIST are yet to be tested in real hardware.
 

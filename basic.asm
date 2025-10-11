@@ -37,6 +37,10 @@
 	;                             LPOS.
 	; Revision date: Oct/10/2025. Solved bug in AND, OR, and XOR (it didn't accepted several
 	;                             in line) Solved bug in IF (it didn't warn of syntax error)
+	;                             Solved bug where INPUT was still writing strings in the
+	;                             old way without garbage collection. DIM now clears
+	;                             assigned space. Solved bug where some string weren't
+	;                             cleared when doing RUN.
 	;
 
 	;
@@ -56,8 +60,8 @@
 basic_buffer:	EQU $8040	; Tokenized buffer.
 basic_buffer_end:	EQU $807F
 variables:	EQU $8080	; A-Z
-strings:	EQU $80E8	; A$-Z$
-program_start:	EQU $8120
+strings:	EQU $80B4	; A$-Z$
+program_start:	EQU $80D0
 memory_limit:	EQU $9F00
 
 start_for:	EQU memory_limit-64
@@ -1522,10 +1526,9 @@ bas_input:	PROC
 	MOVR R4,R0
 	CALL string_create
 	PULR R0
-	SUBI #$41,R0
-	MVII #strings,R5
-	ADDR R0,R5
-	MVO@ R3,R5
+	MVII #strings-$41,R1
+	ADDR R0,R1
+	CALL string_assign
 	PULR R4
 	PULR PC
 
@@ -2237,7 +2240,11 @@ bas_dim:	PROC
 	MVO@ R1,R3
 	INCR R3
 	SLL R1,1	; Length x2.
-	ADDR R1,R3
+	CLRR R2
+@@6:	MVO@ R2,R3	; Clear array.
+	INCR R3
+	DECR R1
+	BNE @@6
 	CLRR R1
 	MVO@ R1,R3
 	MVO R3,bas_last_array
