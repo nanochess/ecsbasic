@@ -699,34 +699,19 @@ fpmulby2:	PROC
 	ENDP
 
 	;
-	; Generate a random number
-	; From my game Mecha Eight.
+	; Generate a random number.
 	;
 fprnd:	PROC
 	PSHR R5
 	MVI lfsr,r0
-	TSTR R0
-	BNE @@1
-	MVII #$7811,R0
-@@1:	MOVR R0,R2
-	ANDI #$8000,R2
+	ADDI #83,R0	; A prime number.
 	MOVR R0,R1
-	ANDI #$0020,R1
-	BEQ @@3
-	XORI #$8000,R2
-@@3:	MOVR R0,R1
-	ANDI #$0100,R1
-	BEQ @@4
-	XORI #$8000,R2
-@@4:	MOVR R0,R1
-	ANDI #$0004,R1
-	BEQ @@5
-	XORI #$8000,R2
-@@5:	RLC R2,1
-	RRC R0,1
+	SWAP R0
+	ANDI #$FF00,R0	; x256
+	ADDR R1,R0	; x257
 	MVO R0,lfsr
-	CLRR R1
-	PSHR R1
+	CLRR R2
+	PSHR R2
 	MVII #$3F,R5
 	; Reuse the normalize code.
 	B fpadd.11	; Normalize

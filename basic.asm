@@ -5258,9 +5258,7 @@ _int_vector:     PROC
 
 	; Adjust random number generator
 	MVI lfsr,R0
-	INCR R0
-	INCR R0
-	INCR R0
+	ADDI #61,R0	; A prime number.
 	MVO R0,lfsr
 
 	RETURN
