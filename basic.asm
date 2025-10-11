@@ -43,6 +43,7 @@
 	;                             cleared when doing RUN. INSTR allows syntax without
 	;                             starting index. Added function POINT(x,y) to read bloxels.
 	;                             Added HEX$.
+	; Revision date: Oct/11/2025. Added DRAW and CIRCLE.
 	;
 
 	;
@@ -448,8 +449,8 @@ keywords_exec:
 	DECLE bas_syntax_error	; $24
 	DECLE bas_llist		; LLIST
 	DECLE bas_lprint	; LPRINT
-	DECLE bas_syntax_error
-	DECLE bas_syntax_error	; $28
+	DECLE bas_draw		; DRAW
+	DECLE bas_circle	; $28 CIRCLE
 	DECLE bas_syntax_error
 	DECLE bas_syntax_error
 	DECLE bas_syntax_error
@@ -547,15 +548,15 @@ keywords:
 	DECLE "PLACEHOLDER0",0	; $24
 	DECLE "LLIST",0	
 	DECLE "LPRINT",0
-	DECLE "PLACEHOLDER1",0
-	DECLE "PLACEHOLDER2",0	; $28
-	DECLE "PLACEHOLDER3",0
-	DECLE "PLACEHOLDER4",0
-	DECLE "PLACEHOLDER5",0
-	DECLE "PLACEHOLDER6",0	; $2C
-	DECLE "PLACEHOLDER7",0
-	DECLE "PLACEHOLDER8",0
-	DECLE "PLACEHOLDER9",0
+	DECLE "DRAW",0
+	DECLE "CIRCLE",0	; $28
+	DECLE "HOLDER3",0
+	DECLE "HOLDER4",0
+	DECLE "HOLDER5",0
+	DECLE "HOLDER6",0	; $2C
+	DECLE "HOLDER7",0
+	DECLE "HOLDER8",0
+	DECLE "HOLDER9",0
 
 	DECLE "AND",0	; $30
 	DECLE "NOT",0
@@ -2680,20 +2681,268 @@ bas_on:	PROC
 bas_plot:	PROC
 	PSHR R5
 	CALL bas_expr_int
-	PSHR R0
+	MVO R0,plot_x
 	CALL get_next
 	CMPI #$2C,R0
 	BNE @@1
 	CALL bas_expr_int
-	PSHR R0
+	MVO R0,plot_y
 	CALL get_next
 	CMPI #$2C,R0
 	BNE @@1
 	CALL bas_expr_int
 	ANDI #7,R0
 	MOVR R0,R2
+	MVI plot_x,R0
+	MVI plot_y,R1
+	CALL draw_pixel
+	PULR PC
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+	ENDP
+
+	;
+	; DRAW
+	;
+bas_draw:	PROC
+	PSHR R5
+	CALL bas_expr_int
+	MVO R0,draw_x
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@1
+	CALL bas_expr_int
+	MVO R0,draw_y
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@1
+	CALL bas_expr_int
+	ANDI #7,R0
+	MOVR R0,R2
+	PSHR R4
+	CALL draw_line
+	PULR R4
+	MVI draw_x,R0
+	MVI draw_y,R1
+	MVO R0,plot_x
+	MVO R1,plot_y
+	PULR PC
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+	ENDP
+
+	;
+	; CIRCLE
+	;
+	; Bresenham's circle drawing algorithm.
+	;
+bas_circle:	PROC
+	PSHR R5
+	CALL bas_expr_int
+	MVO R0,plot_x
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@1
+	CALL bas_expr_int
+	MVO R0,plot_y
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@1
+	CALL bas_expr_int
+	MVO R0,sign_x
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@1
+	CALL bas_expr_int
+	ANDI #7,R0
+	MOVR R0,R2
+	MVI sign_x,R0
+	SLL R0,1
+	NEGR R0
+	ADDI #3,R0
+	MVO R0,err	; err = 3 - 2 * r
+	CLRR R0
+	MVO R0,draw_x
+	MVI sign_x,R1
+	MVO R1,draw_y 
+	CALL draw_circle
+@@2:	MVI draw_x,R0
+	MVI draw_y,R1
+	CMPR R0,R1
+	BLT @@3
+	MVI err,R5
+	CMPI #0,R5
+	BLE @@4
+	DECR R1
+	MOVR R0,R3
+	SUBR R1,R3
+	SLL R3,2
+	ADDI #10,R3
+	ADDR R3,R5	; err = err + (x - y) * 4 + 10
+	B @@5
+
+@@4:	MOVR R0,R3
+	SLL R3,2
+	ADDI #6,R3
+	ADDR R3,R5	; err = err + x * 4 + 6
+@@5:	MVO R5,err
+
+	INCR R0
+	MVO R0,draw_x
+	MVO R1,draw_y
+	CALL draw_circle
+	B @@2
+@@3:
+	PULR PC
+
+@@1:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
+	ENDP
+
+	;
+	; Draw the eight octants for a circle
+	;
+draw_circle:	PROC
+	PSHR R5
+	MVI plot_x,R0
+	ADD draw_x,R0
+	MVI plot_y,R1
+	ADD draw_y,R1
+	PSHR R2
+	CALL draw_pixel
+	PULR R2
+	MVI plot_x,R0
+	SUB draw_x,R0
+	MVI plot_y,R1
+	ADD draw_y,R1
+	PSHR R2
+	CALL draw_pixel
+	PULR R2
+	MVI plot_x,R0
+	ADD draw_x,R0
+	MVI plot_y,R1
+	SUB draw_y,R1
+	PSHR R2
+	CALL draw_pixel
+	PULR R2
+	MVI plot_x,R0
+	SUB draw_x,R0
+	MVI plot_y,R1
+	SUB draw_y,R1
+	PSHR R2
+	CALL draw_pixel
+	PULR R2
+	MVI plot_x,R0
+	ADD draw_y,R0
+	MVI plot_y,R1
+	ADD draw_x,R1
+	PSHR R2
+	CALL draw_pixel
+	PULR R2
+	MVI plot_x,R0
+	SUB draw_y,R0
+	MVI plot_y,R1
+	ADD draw_x,R1
+	PSHR R2
+	CALL draw_pixel
+	PULR R2
+	MVI plot_x,R0
+	ADD draw_y,R0
+	MVI plot_y,R1
+	SUB draw_x,R1
+	PSHR R2
+	CALL draw_pixel
+	PULR R2
+	MVI plot_x,R0
+	SUB draw_y,R0
+	MVI plot_y,R1
+	SUB draw_x,R1
+	PSHR R2
+	CALL draw_pixel
+	PULR R2
+	PULR PC
+	ENDP
+
+	;
+	; Draw a line	
+	;
+draw_line:	PROC
+	PSHR R5
+	PSHR R2
+	MVI plot_x,R0
+	MVI plot_y,R1
+	MVI draw_x,R2
+	MVI draw_y,R3
+	SUBR R0,R2
+	BC @@1
+	NEGR R2
+	MVII #-1,R4
+	B @@2
+
+@@1:	MVII #1,R4
+@@2:	MVO R2,delta_x
+	MVO R4,sign_x
+
+	SUBR R1,R3
+	BC @@3
+	NEGR R3
+	MVII #-1,R5
+	B @@4
+
+@@3:	MVII #1,R5
+@@4:	MVO R3,delta_y
+	MVO R5,sign_y
+	MVI delta_x,R2
+	CMP delta_y,R2
+	BLE @@5
+	SLR R2,1
+	B @@6
+
+@@5:	MVI delta_y,R2
+	SLR R2,1
+	NEGR R2	
+@@6:	MVO R2,err
+	PULR R2
+
+@@7:	PSHR R0
+	PSHR R1
+	PSHR R2
+	CALL draw_pixel
+	PULR R2
 	PULR R1
 	PULR R0
+	CMP draw_x,R0
+	BNE @@8
+	CMP draw_y,R1
+	BEQ @@9
+@@8:
+	MVI delta_x,R5
+	NEGR R5
+	MVI err,R3
+	MOVR R3,R4
+	CMPR R5,R3
+	BLE @@10
+	SUB delta_y,R4
+	ADD sign_x,R0
+
+@@10:	CMP delta_y,R3
+	BGE @@11
+	ADD delta_x,R4
+	ADD sign_y,R1
+@@11:
+	MVO R4,err
+	B @@7
+@@9:
+	PULR PC
+	ENDP
+
+	;
+	; Draw a bloxel (4x4 pixel)
+	;
+draw_pixel:	PROC
+	PSHR R5
 	CMPI #40,R0	; Out of the screen
 	BC @@2
 	CMPI #24,R1	; Out of the screen
@@ -2755,9 +3004,6 @@ bas_plot:	PROC
 	ADDR R2,R3
 	MVO@ R3,R5
 @@2:	PULR PC
-
-@@1:	MVII #ERR_SYNTAX,R0
-	CALL bas_error
 	ENDP
 
 	;
@@ -5057,6 +5303,17 @@ lfsr:		RMB 1	; Random number
 _mode_color:	RMB 1	; Colors for Color Stack mode.
 _gram_bitmap:	RMB 1	; Pointer to bitmap for GRAM.
 _timeout:	RMB 1	;
+	; For the PLOT/DRAW statements.
+plot_x:	RMB 1
+plot_y:	RMB 1
+draw_x:	RMB 1
+draw_y:	RMB 1
+delta_x:	RMB 1
+delta_y:	RMB 1
+sign_x:	RMB 1
+sign_y:	RMB 1
+err:	RMB 1
+
 
 SCRATCH:    ORG $100,$100,"-RWBN"
 	;

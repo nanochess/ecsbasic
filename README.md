@@ -92,8 +92,10 @@ The following statements are supported:
     POKE addr,expr
     ON expr GOTO line1,line2,line3
     ON expr GOSUB line1,line2,line3
-    PLOT x,y,color
-
+    PLOT x1,y1,color
+    DRAW x2,y2,color
+    CIRCLE x1,y1,radius,color
+    
 Statements can be concatenated on a single line using the colon as a separator.
 
 The following expression operators are supported:
