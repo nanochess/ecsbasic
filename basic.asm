@@ -40,7 +40,8 @@
 	;                             Solved bug where INPUT was still writing strings in the
 	;                             old way without garbage collection. DIM now clears
 	;                             assigned space. Solved bug where some string weren't
-	;                             cleared when doing RUN.
+	;                             cleared when doing RUN. INSTR allows syntax without
+	;                             starting index. Added function POINT(x,y) to read bloxels.
 	;
 
 	;
@@ -103,9 +104,9 @@ TOKEN_GT:	EQU TOKEN_START+$39
 
 TOKEN_FUNC:	EQU TOKEN_START+$3a
 
-TOKEN_SPC:	EQU TOKEN_START+$59
-TOKEN_TAB:	EQU TOKEN_START+$5a
-TOKEN_AT:	EQU TOKEN_START+$5b
+TOKEN_SPC:	EQU TOKEN_START+$5e
+TOKEN_TAB:	EQU TOKEN_START+$5f
+TOKEN_AT:	EQU TOKEN_START+$60
 
 	;
 	; Error numbers.
@@ -603,9 +604,16 @@ keywords:
 	DECLE "FRE",0	; $56
 	DECLE "POS",0	; $57
 	DECLE "LPOS",0	; $58
-	DECLE "SPC",0	; $59
-	DECLE "TAB",0	; $5a
-	DECLE "AT",0	; $5b Must be after ATN
+	DECLE "POINT",0	; $59
+
+	DECLE "FUNC1",0	; $5a
+	DECLE "FUNC2",0	; $5b
+	DECLE "FUNC3",0	; $5c
+	DECLE "FUNC4",0	; $5d
+
+	DECLE "SPC",0	; $5e
+	DECLE "TAB",0	; $5f
+	DECLE "AT",0	; $60 Must be after ATN
 	DECLE 0
 
 	;
@@ -3414,7 +3422,7 @@ bas_expr7:	PROC
 	
 	CMPI #TOKEN_FUNC,R0
 	BNC @@6
-	CMPI #TOKEN_FUNC+31,R0
+	CMPI #TOKEN_FUNC+32,R0
 	BC @@2		; Syntax error.
 	MVII #@@0-TOKEN_FUNC,R1
 	ADDR R0,R1
@@ -3458,7 +3466,9 @@ bas_expr7:	PROC
 	DECLE @@FRE
 	DECLE @@POS
 	DECLE @@LPOS
+	DECLE @@POINT
 
+	; RND
 @@RND:
 	PSHR R4
 	CALL fprnd
@@ -3468,21 +3478,29 @@ bas_expr7:	PROC
 	MOVR R1,R3
 	CLRC
 	PULR PC
+
+	; INT(x)
 @@INT:
 	CALL bas_expr_paren
 	BC bas_type_err
 	CALL fpint
 	B @@generic_copy
+
+	; SGN(x)
 @@SGN:
 	CALL bas_expr_paren
 	BC bas_type_err
 	CALL fpsgn
 	B @@generic_copy
+
+	; ABS(x)
 @@ABS:
 	CALL bas_expr_paren
 	BC bas_type_err
 	CALL fpabs
 	B @@generic_copy
+
+	; SIN(x)
 @@SIN:
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -3490,6 +3508,8 @@ bas_expr7:	PROC
 	CALL fpsin
 	PULR R4
 	B @@generic_copy
+
+	; COS(x)
 @@COS:
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -3497,6 +3517,8 @@ bas_expr7:	PROC
 	CALL fpcos
 	PULR R4
 	B @@generic_copy
+
+	; TAN(x)
 @@TAN:
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -3504,6 +3526,8 @@ bas_expr7:	PROC
 	CALL fptan
 	PULR R4
 	B @@generic_copy
+
+	; LOG(x)
 @@LOG:
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -3511,6 +3535,8 @@ bas_expr7:	PROC
 	CALL fpln
 	PULR R4
 	B @@generic_copy
+
+	; EXP(x)
 @@EXP:
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -3518,6 +3544,8 @@ bas_expr7:	PROC
 	CALL fpexp
 	PULR R4
 	B @@generic_copy
+
+	; SQR(x)
 @@SQR:
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -3525,6 +3553,8 @@ bas_expr7:	PROC
 	CALL fpsqrt
 	PULR R4
 	B @@generic_copy
+
+	; ATN(x)
 @@ATN:
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -3533,12 +3563,14 @@ bas_expr7:	PROC
 	PULR R4
 	B @@generic_copy
 
+	; TIMER
 @@TIMER:
 	MVI _frame+1,R0
 	MVI _frame,R1
 	CALL fpfromuint24
 	B @@generic_copy
 
+	; FRE(x)
 @@FRE:
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -3549,6 +3581,7 @@ bas_expr7:	PROC
 	CALL fpfromint
 	B @@generic_copy
 
+	; POS(x)
 @@POS:
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -3558,6 +3591,7 @@ bas_expr7:	PROC
 	CALL fpfromint
 	B @@generic_copy
 
+	; LPOS(x)
 @@LPOS:
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -3566,6 +3600,81 @@ bas_expr7:	PROC
 	INCR R0
 	CALL fpfromint
 	B @@generic_copy
+
+	; POINT(x,y)
+@@POINT:
+	CALL get_next
+	CMPI #$28,R0
+	BNE @@2
+	CALL bas_expr_int
+	PSHR R0
+	CALL get_next
+	CMPI #$2C,R0
+	BNE @@1
+	CALL bas_expr_int
+	PSHR R0
+	CALL get_next
+	CMPI #$29,R0
+	BNE @@2
+	PULR R1
+	PULR R0
+	CMPI #40,R0	; Out of the screen
+	BC @@P1
+	CMPI #24,R1	; Out of the screen
+	BC @@P1
+	MOVR R1,R3
+	SLR R3,1
+	MOVR R3,R5
+	SLL R3,2	; x4
+	ADDR R5,R3	; x5
+	SLL R3,2	; x20
+	ADDI #$0200,R3	; For the backtab
+	MOVR R3,R5
+	MOVR R0,R3
+	SLR R3,1
+	ADDR R3,R5
+	MVI@ R5,R3
+	DECR R5
+	PSHR R4
+	MOVR R3,R4
+	ANDI #$1800,R4
+	CMPI #$1000,R4
+	BNE @@P3
+	PULR R4
+	RRC R1,1
+	BC @@P5
+	; Y bit 0 = 0
+	RRC R0,1
+	BNC @@P4
+	SLR R3,2
+	SLR R3,1
+@@P4:	ANDI #7,R3
+	MOVR R3,R0
+	B @@P2
+
+	; Y bit 0 = 1
+@@P5:	RRC R0,1
+	BC @@P6
+	SLR R3,2
+	SLR R3,2
+	SLR R3,2
+	B @@P4
+
+@@P6:	SWAP R3
+	ANDI #$0026,R3
+	SLR R3,1
+	CMPI #$10,R3
+	BNC @@P4
+	SUBI #$0C,R3
+	B @@P4
+
+@@P3:	PULR R4
+@@P1:	MVII #7,R0
+@@P2:	CALL fpfromint
+	MOVR R0,R2
+	MOVR R1,R3
+	CLRC
+	PULR PC
 
 @@STICK:
 	CALL bas_expr_paren
@@ -3928,13 +4037,14 @@ bas_expr7:	PROC
 	MVO@ R0,R1
 	MOVR R5,PC
 
-	; INSTR
+	; INSTR(A$,B$)
+	; INSTR(expr,A$,B$)
 @@INSTR:
 	CALL get_next
 	CMPI #$28,R0
 	BNE @@2
 	CALL bas_expr
-	BC bas_type_err
+	BC @@INSTR1	; Jump if it is string.
 	MOVR R2,R0
 	MOVR R3,R1
 	CALL fp2int
@@ -3944,6 +4054,11 @@ bas_expr7:	PROC
 	BNE @@2
 	CALL bas_expr
 	BNC bas_type_err
+	B @@INSTR2
+@@INSTR1:
+	CLRR R0
+	PSHR R0
+@@INSTR2:
 	PSHR R3
 	CALL get_next
 	CMPI #$2C,R0

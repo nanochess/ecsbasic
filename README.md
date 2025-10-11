@@ -4,7 +4,7 @@
 
 ### (c) Copyright 2025 Oscar Toledo G.
 
-This a BASIC language for the Intellivision Entertainment Computer System. I intend to make it as a (better) replacement for the incredibly slow Intellivision ECS BASIC.
+This a BASIC language for the Intellivision Entertainment Computer System. I intend to make it as a (better) replacement for the incredibly slow and limited Intellivision ECS BASIC.
 
 It is written in CP1610 assembler language, and it has been tested both in emulation and with real hardware.
 
@@ -45,7 +45,9 @@ The following statements are supported:
     STOP
     INPUT v
     INPUT v$
+    INPUT a(i)
     INPUT "string";v
+    INPUT "string";a(i)
     INPUT "string";v$
     LPRINT
     PRINT expr
@@ -61,18 +63,20 @@ The following statements are supported:
     RETURN
     FOR v=x TO y
     FOR v=x TO y STEP z
+    FOR a(i)=x TO y
     NEXT
     NEXT v
     RESTORE
     RESTORE line
-    READ a
-    READ a,b
+    READ v
+    READ v,v
+    READ a(i)
     READ a$
     READ a$,b$
-    DATA v
-    DATA v,v
+    DATA n
+    DATA n,n
     DATA "string"
-    COLOR v
+    COLOR expr
     SPRITE [0-7],x,y,c
     SOUND 0,[f][,v]
     SOUND 1,[f][,v]
@@ -85,7 +89,7 @@ The following statements are supported:
     MODE 1
     BORDER color
     DEFINE card,"hex.drawing"
-    POKE addr,v
+    POKE addr,expr
     ON expr GOTO line1,line2,line3
     ON expr GOSUB line1,line2,line3
     PLOT x,y,color
@@ -134,6 +138,7 @@ The following expression operators are supported:
     VAL(str)
     STR$(expr)
     INKEY$
+    INSTR(str1,str2)
     INSTR(pos,str1,str2)
     SIN(expr)
     COS(expr)
@@ -146,6 +151,7 @@ The following expression operators are supported:
     FRE(expr)
     POS(expr)
     LPOS(expr)
+    POINT(x,y)
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings nor bidimensional arrays.
 
