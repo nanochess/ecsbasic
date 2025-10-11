@@ -35,6 +35,8 @@
 	;                             loading programs into cassette. Added LLIST and LPRINT.
 	;                             Added SAVE, LOAD, and VERIFY. Added SPC, TAB, POS, and
 	;                             LPOS.
+	; Revision date: Oct/10/2025. Solved bug in AND, OR, and XOR (it didn't accepted several
+	;                             in line) Solved bug in IF (it didn't warn of syntax error)
 	;
 
 	;
@@ -1590,7 +1592,7 @@ bas_if:	PROC
 	B bas_execute
 @@2:
 	CMPI #TOKEN_GOTO,R0
-	BNE @@1
+	BNE @@0
 	PULR R5
 	B bas_goto
 
@@ -1613,6 +1615,9 @@ bas_if:	PROC
 
 @@4:	DECR R4
 	PULR PC
+
+@@0:	MVII #ERR_SYNTAX,R0
+	CALL bas_error
 	ENDP
 
 	;
@@ -2971,7 +2976,7 @@ bas_expr:	PROC
 	PSHR R5
 	CALL bas_expr1
 	BC @@0		; Jump if string.
-	CALL get_next
+@@2:	CALL get_next
 	CMPI #TOKEN_OR,R0
 	BNE @@1
 	MOVR R2,R0
@@ -2991,10 +2996,10 @@ bas_expr:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@2
 
 @@1:	DECR R4
+	CLRC
 @@0:	PULR PC
 	ENDP
 
@@ -3002,7 +3007,7 @@ bas_expr1:	PROC
 	PSHR R5
 	CALL bas_expr2
 	BC @@0		; Jump if string.
-	CALL get_next
+@@2:	CALL get_next
 	CMPI #TOKEN_XOR,R0
 	BNE @@1
 	MOVR R2,R0
@@ -3019,10 +3024,10 @@ bas_expr1:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@2
 
 @@1:	DECR R4
+	CLRC
 @@0:	PULR PC
 	ENDP
 
@@ -3030,7 +3035,7 @@ bas_expr2:	PROC
 	PSHR R5
 	CALL bas_expr3
 	BC @@0		; Jump if string.
-	CALL get_next
+@@2:	CALL get_next
 	CMPI #TOKEN_AND,R0
 	BNE @@1
 	MOVR R2,R0
@@ -3047,10 +3052,10 @@ bas_expr2:	PROC
 	CALL fpfromint
 	MOVR R0,R2
 	MOVR R1,R3
-	CLRC
-	PULR PC
+	B @@2
 
 @@1:	DECR R4
+	CLRC
 @@0:	PULR PC
 	ENDP
 
