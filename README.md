@@ -178,7 +178,7 @@ A small game in this flavor of BASIC:
     120 IF w=0 THEN SOUND 2,,0:IF STRIG(0) THEN v=x:w=88
     130 t=t+5:IF t>=160 THEN t=0:u=INT(RND*32)+8
     140 IF W=0 THEN GOTO 60
-    150 SOUND 2,W+20,12:W=W-4
+    150 SOUND 2,W+20,12:sW=W-4
     160 IF ABS(w-u)<8 AND ABS(v-t)<8 THEN t=164:w=0:SOUND 3,8000,9:SOUND 1,2048,48
     170 GOTO 60
 
@@ -194,7 +194,7 @@ If you are using any other Flash cartridge, be sure to enable 16-bit RAM memory 
 
 The LOAD, SAVE, and VERIFY statements are working in emulation and real hardware. Filenames are four characters (just to keep an small compatibility with the ECS tape format, and because the jzintv emulator can separate different files in the main directory)
 
-For real hardware, instead of cassette, you can use a PC computer and connect the "To tape" connector to the Mic input, and the "From tape" connector to the Line Out. I recommend using Audacity to handle the recording and playing. You need to amplify the recorded signal, Audacity chooses automatically the maximum possible. It is suggested to save your recordings as WAV files.
+For real hardware, instead of cassette, you can use a PC computer and connect the "To tape" connector to the Mic input, and the "From tape" connector to the Line Out. I recommend using Audacity to handle the recording and playing. You need to amplify the recorded signal, Audacity chooses automatically the maximum level possible. It is suggested to save your recordings as WAV files.
 
 In the _utils_ directory, you can see the UFO_20251010.wav file recorded and amplified, ready for replaying.
 
