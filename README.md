@@ -182,13 +182,26 @@ A small game in this flavor of BASIC:
     160 IF ABS(w-u)<8 AND ABS(v-t)<8 THEN t=164:w=0:SOUND 3,8000,9:SOUND 1,2048,48
     170 GOTO 60
 
-This game can be loaded using the jzintv emulator and the provided _tape_UFO.ecs_ file.
+This game can be loaded using the jzintv emulator and the provided _tape_UFO.ecs_ file from the _utils_ directory.
  
-## Cassette and printer support
+## Running the interpreter in real hardware
+
+You can load the ROM in a JLP-Flash cartridge for running the BASIC interpreter on a real Intellivision. You need the Mattel Intellivision ECS, as this peripheral provides the computer keyboard.
+
+If you are using any other Flash cartridge, be sure to enable 16-bit RAM memory in the area $8000-$9fff (8K words). Most cartridges implement it as CC3 memory (Cuttle Cart 3) because it was the first to provide it.
+
+## Cassette support
 
 The LOAD, SAVE, and VERIFY statements are working in emulation and real hardware. Filenames are four characters (just to keep an small compatibility with the ECS tape format, and because the jzintv emulator can separate different files in the main directory)
 
-The LPRINT, and LLIST statements haven´t been verified yet in emulation, because jzintv has a bug.
+For real hardware, instead of cassette, you can use a PC computer and connect the "To tape" connector to the Mic input, and the "From tape" connector to the Line Out. I recommend using Audacity to handle the recording and playing. You need to amplify the recorded signal, Audacity chooses automatically the maximum possible. It is suggested to save your recordings as WAV files.
 
-LPRINT and LLIST are yet to be tested in real hardware.
+In the _utils_ directory, you can see the UFO_20251010.wav file recorded and amplified, ready for replaying.
 
+## Printer support
+
+The LPRINT, and LLIST statements are working in real hardware using a Mattel Aquarius printer. Never tested in emulation, because jzintv has a bug.
+
+If your printer doesn't come with the cable, here is a schematic of how you can build one: https://forums.atariage.com/topic/323929-aquarius-printer-technical-info-and-reverse-engineering/
+
+![image](README1.jpg)
