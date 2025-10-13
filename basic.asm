@@ -682,6 +682,8 @@ bas_get_line:	PROC
 	BEQ @@0
 	CALL bas_restore_cursor
 	PULR R4
+	CMPI #KEY.ESC,R0
+	BEQ bas_stop
 	CMPI #KEY.ENTER,R0
 	BEQ @@1
 	CMPI #KEY.LEFT,R0
