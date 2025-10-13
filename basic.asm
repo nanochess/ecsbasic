@@ -52,9 +52,8 @@
 	;
 
 	ROMW 16
-	ORG $5000
 
-	CFGVAR "jlp" = 1	; Enable JLP RAM on real hardware.
+	ORG $5000
 
 	;
 	; The area $8000-$803f is reserved because STIC mirroring.
@@ -132,6 +131,9 @@ ERR_NODATA:	EQU 15
 ERR_NOFILE:	EQU 16
 ERR_MISMATCH:	EQU 17
 
+	;
+	; Keyboard constants.
+	;
 KEY.LEFT    EQU     $1C     ; \   Can't be generated otherwise, so perfect
 KEY.RIGHT   EQU     $1D     ;  |_ candidates.  Could alternately send 8 for
 KEY.UP      EQU     $1E     ;  |  left... not sure...
@@ -140,6 +142,9 @@ KEY.ENTER   EQU     $A      ; Newline
 KEY.ESC     EQU     27
 KEY.NONE    EQU     $FF
 
+	;
+	; Output constants.
+	;
 BAS_CR:	EQU $0d
 BAS_LF:	EQU $0a
 BAS_BS:	EQU $1C		; Same as KEY.LEFT
@@ -165,7 +170,7 @@ _ONES:	DECLE   $0001, $0001	; Initial color stack 0 and 1: Blue
 	DECLE   $0001, $0001	; Initial color stack 2 and 3: Blue
 	DECLE   $0001		; Initial border color: Blue
 
-CLRSCR:	MVII #$200,R4		; Used also for CLS
+CLRSCR:	MVII #$200,R4		
 	MVII #$F0,R1
 FILLZERO:
 	CLRR R0
@@ -305,21 +310,30 @@ _ecs1:
 	MVO R0,$01f8
 	MVO R0,$00f8
 
+	;
+	; Set initial state for UART.
+	;
 	CALL printer_reset
 
+	;
+	; Output reset.
+	;
 	MVII #1,R0
 	MVO R0,_border_color
 	MVII #$07,R0
 	MVO R0,bas_curcolor
 
-	CALL new_program
-	CALL bas_cls
+	CALL new_program	; Erase program.
+	CALL bas_cls		; Erase screen.
 	CLRR R0
-	MVO R0,bas_curline
+	MVO R0,bas_curline	; Nothing in execution.
 	MVII #ERR_TITLE,R0
-	CALL bas_error
+	CALL bas_error		; Show welcome message.
+	;
+	; Point for BASIC restart.
+	;
 basic_restart:
-	MVII #STACK,R6
+	MVII #STACK,R6		; Reset stack.
 	MVII #$52,R0
 	CALL bas_output
 	MVII #$45,R0
@@ -358,15 +372,15 @@ basic_restart:
 	; Main loop.
 	;
 main_loop:
-	CALL bas_save_cursor
+	CALL bas_save_cursor	; Save content under the cursor.
 @@0:
-	CALL bas_blink_cursor
-	CALL SCAN_KBD
+	CALL bas_blink_cursor	; Blink the cursor.
+	CALL SCAN_KBD		; Explore the keyboard.
 	CMPI #KEY.NONE,R0
 	BEQ @@0
-	CALL bas_restore_cursor
-	CMPI #KEY.ENTER,R0
-	BNE @@1
+	CALL bas_restore_cursor	; Restore the content under the cursor.
+	CMPI #KEY.ENTER,R0	; Pressed Enter/Return?
+	BNE @@1			; No, jump.
 	CALL bas_output_newline
 	MVI bas_firstpos,R4
 	CALL bas_tokenize
@@ -403,8 +417,8 @@ main_loop:
 	MVO R0,bas_firstpos
 	B main_loop
 @@1:
-	CALL bas_output
-	B main_loop
+	CALL bas_output		; Output the typed key.
+	B main_loop		; Repeat the loop.
 
 	;
 	; Table of statements' addresses.
@@ -652,9 +666,9 @@ errors:
 	;
 bas_get_line:	PROC
 	PSHR R5
-	MVII #$3F,R0
+	MVII #$3F,R0	; Question mark.
 	CALL bas_output
-	MVII #$20,R0
+	MVII #$20,R0	; Space.
 	CALL bas_output
 	MVII #basic_buffer,R4
 @@2:
@@ -744,7 +758,7 @@ line_delete:	PROC
 	MVI program_end,R1
 	SUBR R2,R1	; Move end pointer.
 	MVO R1,program_end
-@@1:	MVI@ R5,R0
+@@1:	MVI@ R5,R0	; Block move.
 	MVO@ R0,R4
 	DECR R3
 	BNE @@1
@@ -773,7 +787,7 @@ line_insert:	PROC
 	SUBR R0,R1
 	INCR R1
 	PSHR R0
-@@1:	MVI@ R5,R0
+@@1:	MVI@ R5,R0	; Block move.
 	DECR R5
 	DECR R5
 	MVO@ R0,R4
@@ -800,10 +814,10 @@ line_insert:	PROC
 	; Get next character or token.
 	;
 get_next:	PROC
-	MVI@ R4,R0
-	CMPI #$20,R0
-	BEQ get_next
-	MOVR R5,PC
+	MVI@ R4,R0	; Read token.
+	CMPI #$20,R0	; Is it space?
+	BEQ get_next	; Yes, jump.
+	MOVR R5,PC	; Return.
 	ENDP
 
 	;
@@ -852,6 +866,9 @@ bas_error:	PROC
 	B basic_restart
 	ENDP
 
+	;
+	; Read a screen card (for tokenization)
+	;
 bas_read_card:	PROC
 	MVI@ R4,R0
 	ANDI #$0FF8,R0
@@ -1053,7 +1070,7 @@ bas_execute:	PROC
 	MVO R0,bas_strptr	; Reset strings stack.
 @@0:
 	MVI@ R4,R0
-	CMPI #32,R0
+	CMPI #$20,R0
 	BEQ @@0
 	CMPI #TOKEN_START,R0	; Token found?
 	BC @@2
@@ -1106,7 +1123,9 @@ bas_execute:	PROC
 	ENDP
 
 	;
-	; List the program
+	; LIST
+	;
+	; List the program to the screen.
 	;
 bas_list:	PROC
 	MVII #bas_output,R2
@@ -1117,6 +1136,8 @@ bas_list:	PROC
 	;
 	; LLIST
 	;
+	; List the program to the printer.
+	;
 bas_llist:	PROC
 	MVII #printer_output,R2
 	MVO R2,bas_func
@@ -1124,16 +1145,12 @@ bas_llist:	PROC
 	ENDP
 
 	;
-	; List the program
+	; List the program.
 	;
 bas_generic_list:	PROC
 	PSHR R5
-	CALL get_next	; Check for line number.
-	CMPI #$30,R0
-	BNC @@10
-	CMPI #$3A,R0
-	BC @@10
 	CALL parse_integer
+	BC @@10		; Jump if no integer.
 	MVO R0,bas_listen
 	PSHR R4
 	CALL line_search
@@ -1152,12 +1169,8 @@ bas_generic_list:	PROC
 	BNE @@12	; No, jump.
 	MVII #$FFFF,R0
 	MVO R0,bas_listen
-	CALL get_next
-	CMPI #$30,R0	; Number?
-	BNC @@12	; No, jump.
-	CMPI #$3A,R0
-	BC @@12
 	CALL parse_integer
+	BC @@12
 	MVO R0,bas_listen
 	INCR R7
 
@@ -1174,7 +1187,7 @@ bas_generic_list:	PROC
 	BC @@2
 @@15:
 	PSHR R4
-	CALL PRNUM16.l
+	CALL PRNUM16.l	; Print line number.
 	MVII #$20,R0	; Space.
 	CALL indirect_output
 	PULR R4
@@ -1238,6 +1251,8 @@ new_program:	PROC
 	ENDP
 
 	;
+	; NEW
+	;
 	; Erase the whole program.
 	; Execution cannot continue.
 	;
@@ -1247,34 +1262,32 @@ bas_new:	PROC
 	ENDP
 
 	;
+	; CLS
+	;
 	; Clear the screen.
 	;
 bas_cls:	PROC
+	PSHR R5
 	PSHR R4
 	MVII #$0200,R4	; Pointer to the screen.
 	MVO R4,bas_ttypos
 	MVI bas_curcolor,R0
-	MVII #$00F0/2,R1
-@@1:	MVO@ R0,R4	; Erase the screen.
-	MVO@ R0,R4
-	DECR R1
-	BNE @@1
+	MVII #$00F0,R1
+	CALL MEMSET
 	PULR R4
-	MOVR R5,PC
+	PULR PC
 	ENDP
 	
+	;
+	; RUN
 	;
 	; Run the program
 	;
 bas_run:	PROC
 	MVII #STACK,R6
 
-	CALL get_next
-	CMPI #$30,R0
-	BNC @@2
-	CMPI #$3A,R0
-	BC @@2
 	CALL parse_integer
+	BC @@2
 	CALL line_search
 	CMPR R1,R0
 	BEQ @@3		; Jump if found.
@@ -1304,22 +1317,19 @@ restart_pointers:	PROC
 	CLRR R0
 	MVO R0,bas_dataptr
 	
-	MVI program_end,R3
+	MVI program_end,R3	; Get pointer to final word (zero)
 	INCR R3			; Jump over the final word.
-	MVO R3,bas_arrays	
-	CLRR R0			; No arrays.
-	MVO@ R0,R3
-	MVO R3,bas_last_array
+	MVO R3,bas_arrays	; Use as start for array list.
+	CLRR R0			; No arrays in the list.
+	MVO@ R0,R3		; Take note.
+	MVO R3,bas_last_array	; Pointer to the last array.
 
 	MVII #variables,R4
 	CLRR R0
-	MVII #(26*2+26)/2,R1	; Reset variables and string variables
-@@1:	MVO@ R0,R4
-	MVO@ R0,R4
-	DECR R1
-	BNE @@1
+	MVII #26*2+26,R1	; Reset variables and string variables
+	CALL MEMSET
 
-	MVII #start_strings,R4
+	MVII #start_strings,R4	; Reset string base stack.
 	MVO R4,bas_strbase
 	
 	PULR PC
@@ -1336,6 +1346,8 @@ bas_stop:	PROC
 	;
 	; PRINT
 	;
+	; Print to the screen.
+	;
 bas_print:	PROC
 	MVII #bas_output,R2
 	MVO R2,bas_func
@@ -1345,12 +1357,17 @@ bas_print:	PROC
 	;
 	; LPRINT
 	;
+	; Print to the printer.
+	;
 bas_lprint:	PROC
 	MVII #printer_output,R2
 	MVO R2,bas_func
 	B bas_generic_print
 	ENDP
 
+	;
+	; Generic print routine.
+	; 
 bas_generic_print:	PROC
 	PSHR R5
 	CALL get_next
@@ -1370,11 +1387,11 @@ bas_generic_print:	PROC
 	BEQ @@6
 	CMPI #TOKEN_ELSE,R0
 	BEQ @@6
-	CMPI #$22,R0
+	CMPI #$22,R0	; Quotes?
 	BNE @@2
 @@1:
 	MVI@ R4,R0
-	CMPI #$22,R0
+	CMPI #$22,R0	; Quotes?
 	BEQ @@3
 	PSHR R4
 	CALL indirect_output
@@ -1398,7 +1415,7 @@ bas_generic_print:	PROC
 	PULR R4
 	PULR PC
 
-@@4:	CMPI #TOKEN_SPC,R0
+@@4:	CMPI #TOKEN_SPC,R0	; SPC?
 	BNE @@11
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -1414,7 +1431,7 @@ bas_generic_print:	PROC
 	DECR R0
 	B @@12
 
-@@11:	CMPI #TOKEN_TAB,R0
+@@11:	CMPI #TOKEN_TAB,R0	; TAB?
 	BNE @@14
 	CALL bas_expr_paren
 	BC bas_type_err
@@ -1552,12 +1569,8 @@ bas_input:	PROC
 	;
 bas_goto:	PROC
 	PSHR R5
-	CALL get_next
-	CMPI #$30,R0
-	BNC @@0
-	CMPI #$3A,R0
-	BC @@0
 	CALL parse_integer
+	BC @@0
 @@1:	; Entry point for ON GOTO
 	CALL line_search
 	CMPR R1,R0
@@ -1586,6 +1599,7 @@ bas_goto:	PROC
 bas_if:	PROC
 	PSHR R5
 	CALL bas_expr
+	BC @@0
 	ANDI #$7F,R3		; Is it zero?
 	BEQ @@1			; Yes, jump.
 	CALL get_next
@@ -1643,7 +1657,7 @@ get_next_point:	PROC
 	MVI@ R4,R0
 	TSTR R0
 	BEQ @@1
-	CMPI #32,R0
+	CMPI #$20,R0
 	BEQ @@2
 	CMPI #TOKEN_COLON,R0
 	BEQ @@3
@@ -1688,10 +1702,10 @@ get_var_addr:	PROC
 	PSHR R4
 	MVI bas_arrays,R3
 @@3:	MVI@ R3,R4
-	TSTR R4
+	TSTR R4		; End of arrays?
 	BEQ @@5
-	CMP@ R3,R2
-	BEQ @@4
+	CMP@ R3,R2	; Name comparison.
+	BEQ @@4		; Jump if found.
 	INCR R3
 	MVI@ R3,R0
 	INCR R3
@@ -1711,9 +1725,8 @@ get_var_addr:	PROC
 	PULR PC
 
 @@2:	DECR R4
-	SUBI #$41,R2
 	SLL R2,1
-	MVII #variables,R5
+	MVII #variables-$41*2,R5
 	ADDR R2,R5
 	PULR PC
 
@@ -1894,12 +1907,8 @@ bas_next:	PROC
 	;
 bas_gosub:	PROC
 	PSHR R5
-	CALL get_next
-	CMPI #$30,R0
-	BNC @@0
-	CMPI #$3A,R0
-	BC @@0
 	CALL parse_integer
+	BC @@0
 @@1:	; Entry point for ON GOSUB
 	CALL get_next_point
 	MVI bas_gosubptr,R5
@@ -1995,12 +2004,8 @@ data_locate:	PROC
 	;
 bas_restore:	PROC
 	PSHR R5
-	CALL get_next
-	CMPI #$30,R0
-	BNC @@1
-	CMPI #$3A,R0
-	BC @@1
 	CALL parse_integer
+	BC @@1
 	PSHR R4
 	CALL line_search
 	CMPR R1,R0
@@ -2209,12 +2214,8 @@ bas_dim:	PROC
 	CALL get_next
 	CMPI #$28,R0
 	BNE @@1
-	CALL get_next
-	CMPI #$30,R0
-	BNC @@1
-	CMPI #$3A,R0
-	BC @@1
 	CALL parse_integer
+	BC @@1
 	INCR R0		; Count zero.
 	PSHR R0
 	CALL get_next
@@ -2649,12 +2650,8 @@ bas_on:	PROC
 	BEQ @@4
 	B @@5
 
-@@2:	CALL get_next
-	CMPI #$30,R0
-	BNC @@6
-	CMPI #$3A,R0
+@@2:	CALL parse_integer	; Get the target line number.
 	BC @@6
-	CALL parse_integer	; Get the target line number.
 	PULR R1
 	CMPI #TOKEN_GOSUB,R1
 	BNE bas_goto.1
@@ -3859,7 +3856,7 @@ bas_expr7:	PROC
 	PSHR R0
 	CALL get_next
 	CMPI #$2C,R0
-	BNE @@1
+	BNE @@2
 	CALL bas_expr_int
 	PSHR R0
 	CALL get_next
@@ -4416,8 +4413,22 @@ bas_expr7:	PROC
 	MOVR R0,PC
 
 @@6:	CMPI #$22,R0	; Quote?
-	BNE @@12
-	MOVR R4,R5	; Start of string.
+	BEQ @@36
+	CMPI #$28,R0	; Parenthesis?
+	BEQ @@12
+	CMPI #$41,R0	; A-Z?
+	BNC @@35
+	CMPI #$5B,R0
+	BNC @@5
+@@35:	CMPI #$2E,R0	; Period?
+	BEQ @@11
+	CMPI #$30,R0	; 0-9?
+	BNC @@2
+	CMPI #$3A,R0
+	BNC @@11
+	B @@2
+
+@@36:	MOVR R4,R5	; Start of string.
 @@14:	MVI@ R4,R0
 	CMPI #$22,R0	; Locate end of string.
 	BNE @@14
@@ -4431,21 +4442,15 @@ bas_expr7:	PROC
 	SETC		; String
 	PULR PC
 
-@@12:	CMPI #$28,R0	; Parenthesis?
-	BNE @@5
-	CALL bas_expr
+@@12:	CALL bas_expr
 	GSWD R1
 	CALL get_next
 	CMPI #$29,R0
 	BNE @@2
 	RSWD R1
 	PULR PC
-@@5:	
-	CMPI #$41,R0	; A-Z?
-	BNC @@1
-	CMPI #$5B,R0
-	BC @@1
-	MVI@ R4,R1
+
+@@5:	MVI@ R4,R1
 	CMPI #$24,R1	; $
 	BNE @@17
 	CALL get_string_addr.0
@@ -4470,12 +4475,6 @@ bas_expr7:	PROC
 	CLRC
 	PULR PC
 
-@@1:	CMPI #$2E,R0
-	BEQ @@11
-	CMPI #$30,R0	; 0-9?
-	BNC @@2
-	CMPI #$3A,R0
-	BC @@2
 @@11:
 	DECR R4
 	CALL fpparse
@@ -4495,6 +4494,12 @@ bas_expr7:	PROC
 	; Parse an integer.
 	;
 parse_integer:	PROC
+	PSHR R5
+	CALL get_next	
+	CMPI #$30,R0
+	BNC @@4
+	CMPI #$3A,R0
+	BC @@4
 	CLRR R2
 @@1:
 	SUBI #$30,R0
@@ -4511,7 +4516,10 @@ parse_integer:	PROC
 @@3:
 	DECR R4
 	MOVR R2,R0
-	MOVR R5,PC
+	PULR PC
+
+@@4:	SETC
+	PULR PC
 	ENDP
 
 	;
@@ -5330,4 +5338,11 @@ temp1:		RMB 1	; Temporary value.
 _filename:	RMB 4	; File name.
 _printer_col:	RMB 1	; Printer column.
 
+	; Enable JLP RAM on real hardware. Nice for LTO-Flash.
+;	CFGVAR "jlp" = 1	
 
+	; Map CC3 RAM
+	; It is better to be cartridge agnostic.
+MAIN_RAM:	ORG $8000,$8000,"=RW"
+
+	RMB 8192

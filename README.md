@@ -178,7 +178,7 @@ A small game in this flavor of BASIC:
     120 IF w=0 THEN SOUND 2,,0:IF STRIG(0) THEN v=x:w=88
     130 t=t+5:IF t>=160 THEN t=0:u=INT(RND*32)+8
     140 IF W=0 THEN GOTO 60
-    150 SOUND 2,W+20,12:sW=W-4
+    150 SOUND 2,W+20,12:W=W-4
     160 IF ABS(w-u)<8 AND ABS(v-t)<8 THEN t=164:w=0:SOUND 3,8000,9:SOUND 1,2048,48
     170 GOTO 60
 
