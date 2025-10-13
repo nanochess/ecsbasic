@@ -14,6 +14,8 @@
 	;                             1.0 / 3.0 * 3.0 = 1.0)
 	; Revision date: Sep/24/2025. Added fprnd.
 	; Revision date: Oct/05/2025. Added fpfromuint24.
+	; Revision date: Oct/12/2025. Optimized integer to floating-point conversion.
+	; Revision date: Oct/13/2025. Optimized addition and multiplication.
 	;
 
 	; Temporary
@@ -75,7 +77,7 @@ fpadd:	PROC
 @@4:
 	CMPI #$FFE8,R5	; Too small (25 bits off)? (second operand wouldn't cause effect)
 	BLT @@2		; Return with first operand unchanged.
-
+			; Overflow Flag = 0
 	PSHR R1		; Save first operand's sign and exponent.
 	MOVR R1,R4
 	XORR R3,R4	; XOR both signs.
@@ -83,12 +85,12 @@ fpadd:	PROC
 	ANDI #$FF00,R1	; Remove exponents.
 	ANDI #$FF00,R3
 
-	SETC		; Restore bit one in mantissa.
-	RRC R0,1
-	RRC R1,1
-	SETC		; Restore bit one in mantissa.
-	RRC R2,1
-	RRC R3,1
+	SETC		
+	RRC R0,2	; Insert leading zero and restore bit one in mantissa.
+	RRC R1,2
+	SETC		
+	RRC R2,2	; Insert leading zero and restore bit one in mantissa.
+	RRC R3,2
 	TSTR R5		; Displace second operand to the right.
 	BEQ @@3
 @@5:
@@ -99,23 +101,14 @@ fpadd:	PROC
 	BNE @@5
 	; At this point both numbers have the same exponent
 @@3:	
-	CLRC
-	RRC R0,1	; Insert a leading zero (to detect carry)
-	RRC R1,1	; Mantissa is now 26 bits.
-
-	CLRC
-	RRC R2,1	; Insert a leading zero (to detect carry)
-	RRC R3,1	; Mantissa is now 26 bits.
-
 	PULR R5
 	PSHR R5
 	ANDI #$007F,R5
-	INCR R5		; Exponent for the number.
-	INCR R5
+	ADDI #2,R5	; Exponent for the number.
 
 	ANDI #$80,R4	; Is required an addition or subtraction?
 	BEQ @@6		; Jump for addition.
-	SUBR R3,R1
+	SUBR R3,R1	; 32-bit subtraction.
 	DECR R0
 	ADCR R0
 	SUBR R2,R0
@@ -130,7 +123,7 @@ fpadd:	PROC
 	B @@8
 
 @@6:
-	ADDR R3,R1	; Addition
+	ADDR R3,R1	; 32-bit addition
 	ADCR R0
 	ADDR R2,R0
 	;
@@ -204,7 +197,7 @@ fpmul:	PROC
 	; Exponents in R4 and R5
 @@3:	ADDR R5,R4
 	SUBI #FPEXP_BIAS-2,R4	; Subtract exponent bias.
-
+			; Overflow Flag = zero.
 	MOVR R1,R5
 	XORR R3,R5
 	PSHR R5		; Saved XOR'ed sign bit.
@@ -217,10 +210,8 @@ fpmul:	PROC
 	RRC R0,1
 	RRC R1,1
 	SETC		; Restore bit one in mantissa
-	RRC R2,1
-	RRC R3,1	; For the extra bit...
-	RRC R2,1	; ...because a multiplication can generate
-	RRC R3,1	; ...(x + y) - 1 bits or (x + y) bits.
+	RRC R2,2	; ...For the extra bit because a multiplication can
+	RRC R3,2	; ...generate (x + y) - 1 bits or (x + y) bits.
 
 	;
 	; Multiply both mantissas
@@ -243,7 +234,7 @@ fpmul:	PROC
 	ADDR R3,R1
 	ADCR R0
 	ADDR R2,R0
-@@5:	CLRC
+@@5:	; CLRC		; Carry is always zero here.
 	RRC R2,1
 	RRC R3,1
 	ADDR R5,R5
@@ -383,11 +374,10 @@ fpcomp:	PROC
 	; Output: R0,R1 = Floating-point value.
 	;
 fpfromint:	PROC
-	PSHR R5
+	CLRR R1
 	TSTR R0
 	BNE @@1
-	CLRR R1
-	B @@2
+	MOVR R5,PC
 
 @@1:	BPL @@3
 	MVII #$80,R2
@@ -395,17 +385,11 @@ fpfromint:	PROC
 	B @@4
 
 @@3:	CLRR R2
-@@4:
-	SWAP R0
-	MOVR R0,R1
-	ANDI #$00FF,R0
-	ANDI #$FF00,R1
+@@4:	PSHR R5
 	PSHR R2
-	MVII #FPEXP_BIAS+$18,R5
+	MVII #FPEXP_BIAS+$10,R5
 	; Reuse the normalize code.
 	B fpadd.11	; Normalize
-
-@@2:	PULR PC
 	ENDP
 
 	;
@@ -416,24 +400,17 @@ fpfromint:	PROC
 	;
     IF 0
 fpfromuint:	PROC
-	PSHR R5
+	CLRR R1
 	TSTR R0
 	BNE @@1
-	CLRR R1
-	B @@2
+	MOVR R5,PC
 
-@@1:	CLRR R2
-	SWAP R0
-	MOVR R0,R1
-	ANDI #$00FF,R0
-	ANDI #$FF00,R1
+@@1:	PSHR R5
+	CLRR R2
 	PSHR R2
-	MVII #FPEXP_BIAS+$18,R5
+	MVII #FPEXP_BIAS+$10,R5
 	; Reuse the normalize code.
 	B fpadd.11	; Normalize
-
-@@2:	PULR PC
-	ENDP
     ENDI
 
 	;
@@ -443,12 +420,13 @@ fpfromuint:	PROC
 	; Output: R0,R1 = Floating-point value.
 	;
 fpfromuint24:	PROC
-	PSHR R5
 	TSTR R0
 	BNE @@1
 	TSTR R1
-	BEQ @@2
-@@1:
+	BNE @@1
+	MOVR R5,PC
+
+@@1:	PSHR R5
 	CLRR R2
 	PSHR R2
 	SWAP R0
@@ -461,8 +439,6 @@ fpfromuint24:	PROC
 	MVII #FPEXP_BIAS+$18,R5
 	; Reuse the normalize code.
 	B fpadd.11	; Normalize
-
-@@2:	PULR PC
 	ENDP
 
 	;
