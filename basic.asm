@@ -44,6 +44,7 @@
 	;                             starting index. Added function POINT(x,y) to read bloxels.
 	;                             Added HEX$.
 	; Revision date: Oct/11/2025. Added DRAW and CIRCLE.
+	; Revision date: Oct/13/2025. Optimized expression parsing.
 	;
 
 	;
@@ -813,12 +814,21 @@ line_insert:	PROC
 	;
 	; Get next character or token.
 	;
+    if 0
 get_next:	PROC
 	MVI@ R4,R0	; Read token.
 	CMPI #$20,R0	; Is it space?
 	BEQ get_next	; Yes, jump.
 	MOVR R5,PC	; Return.
 	ENDP
+    endi
+	MACRO macro_get_next
+	;
+macgn%%:
+	MVI@ R4,R0
+	CMPI #$20,R0
+	BEQ macgn%%
+	ENDM
 
 	;
 	; Emit a BASIC error and stop execution.
@@ -1043,7 +1053,7 @@ bas_execute_line:	PROC
 	BEQ @@0
 	DECR R4
 	CALL bas_execute
-	CALL get_next
+	macro_get_next
 	TSTR R0
 	BEQ @@0
 	CMPI #TOKEN_ELSE,R0
@@ -1065,7 +1075,6 @@ bas_execute_line:	PROC
 	; Execute a BASIC statement
 	;
 bas_execute:	PROC
-	PSHR R5
 	MVI bas_strbase,R0
 	MVO R0,bas_strptr	; Reset strings stack.
 @@0:
@@ -1082,9 +1091,10 @@ bas_execute:	PROC
 	MVI@ R4,R1
 	CMPI #$24,R1		; Is it string?
 	BNE @@3			; No, jump.
+	PSHR R5
 	CALL get_string_addr.0
 	PSHR R5
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_EQ,R0
 	BNE @@1
 	CALL bas_expr
@@ -1095,10 +1105,11 @@ bas_execute:	PROC
 	PULR R4
 	PULR PC
 
-@@3:	DECR R4
+@@3:	PSHR R5
+	DECR R4
 	CALL get_var_addr.0
 	PSHR R5
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_EQ,R0
 	BNE @@1
 	CALL bas_expr
@@ -1118,8 +1129,8 @@ bas_execute:	PROC
 
 @@2:	MVII #keywords_exec-TOKEN_START,R3
 	ADDR R0,R3
-	PULR R5
 	MVI@ R3,PC
+
 	ENDP
 
 	;
@@ -1164,7 +1175,7 @@ bas_generic_list:	PROC
 @@11:	MOVR R4,R5	; Save start pointer.
 	PULR R4
 	PSHR R5
-	CALL get_next
+	macro_get_next
 	CMPI #$2D,R0	; Range?
 	BNE @@12	; No, jump.
 	MVII #$FFFF,R0
@@ -1370,7 +1381,7 @@ bas_lprint:	PROC
 	; 
 bas_generic_print:	PROC
 	PSHR R5
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_AT,R0
 	BNE @@5
 	CALL bas_expr_int
@@ -1379,7 +1390,7 @@ bas_generic_print:	PROC
 	ADDI #$0200,R0
 	MVO R0,bas_ttypos
 @@3:
-	CALL get_next
+	macro_get_next
 @@5:
 	TSTR R0
 	BEQ @@6
@@ -1400,7 +1411,7 @@ bas_generic_print:	PROC
 	
 @@2:	CMPI #$3B,R0
 	BNE @@4
-	CALL get_next
+	macro_get_next
 	TSTR R0
 	BNE @@5
 	DECR R4
@@ -1499,7 +1510,7 @@ bas_generic_print:	PROC
 bas_input:	PROC
 	PSHR R5
 @@3:
-	CALL get_next
+	macro_get_next
 @@5:
 	TSTR R0
 	BEQ @@6
@@ -1518,10 +1529,10 @@ bas_input:	PROC
 	PULR R4
 	B @@1
 	
-@@2:	CALL get_next
+@@2:	macro_get_next
 	CMPI #$3B,R0
 	BNE @@6
-	CALL get_next
+	macro_get_next
 @@4:
 	CMPI #$41,R0
 	BNC @@6
@@ -1602,10 +1613,10 @@ bas_if:	PROC
 	BC @@0
 	ANDI #$7F,R3		; Is it zero?
 	BEQ @@1			; Yes, jump.
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_THEN,R0
 	BNE @@2
-	CALL get_next
+	macro_get_next
 	CMPI #$30,R0
 	BNC @@3
 	CMPI #$3A,R0
@@ -1626,7 +1637,7 @@ bas_if:	PROC
 @@1:	CLRR R5
 @@6:
 	PSHR R5
-	CALL get_next
+	macro_get_next
 	PULR R5
 	TSTR R0		; Reached end of line?
 	BEQ @@4		; Yes, no ELSE found.
@@ -1686,7 +1697,7 @@ get_var_addr:	PROC
 @@0:
 	PSHR R5
 	MOVR R0,R2
-	CALL get_next
+	macro_get_next
 	CMPI #$28,R0		; Array?
 	BNE @@2			; No, jump.
 	PSHR R2
@@ -1696,7 +1707,7 @@ get_var_addr:	PROC
 	CALL fp2uint
 	PULR R2
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$29,R0
 	BNE @@1
 	PSHR R4
@@ -1750,19 +1761,19 @@ bas_for:	PROC
 	CMPI #end_for-5,R5
 	BC @@1
 	; Try an assignment
-	CALL get_next
+	macro_get_next
 	CALL get_var_addr
 	MVI bas_forptr,R3
 	MVO@ R5,R3		; Take note of the variable.
 	PSHR R5
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_EQ,R0
 	BNE @@2
 	CALL bas_expr
 	PULR R5
 	MVO@ R2,R5		; Assign initial value.
 	MVO@ R3,R5
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_TO,R0
 	BNE @@2
 	MVI bas_forptr,R3
@@ -1770,7 +1781,7 @@ bas_for:	PROC
 	INCR R3
 	MVO@ R4,R3		; Take note of TO expression
 	CALL bas_expr		; Evaluate once
-	CALL get_next
+	macro_get_next
 	MVI bas_forptr,R3
 	INCR R3
 	CMPI #TOKEN_STEP,R0
@@ -1815,7 +1826,7 @@ bas_next:	PROC
 @@0:
 	MVII #ERR_NEXT,R0
 	CALL bas_error
-@@1:	CALL get_next
+@@1:	macro_get_next
 	CMPI #$41,R0		; Variable name?
 	BNC @@2
 	CMPI #$5B,R0
@@ -2043,7 +2054,7 @@ bas_restore:	PROC
 bas_read:	PROC
 	PSHR R5
 @@12:
-	CALL get_next
+	macro_get_next
 	CMPI #$41,R0		; Variable name?
 	BNC @@2
 	CMPI #$5B,R0
@@ -2154,7 +2165,7 @@ bas_read:	PROC
 @@9:	DECR R4
 @@10:	MVO R4,bas_dataptr
 	PULR R4
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BEQ @@12
 	DECR R4
@@ -2205,20 +2216,20 @@ bas_data:	PROC
 	;
 bas_dim:	PROC
 	PSHR R5
-	CALL get_next
+	macro_get_next
 	CMPI #$41,R0	; Variable name?
 	BNC @@1
 	CMPI #$5B,R0
 	BC @@1		; No, jump.
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$28,R0
 	BNE @@1
 	CALL parse_integer
 	BC @@1
 	INCR R0		; Count zero.
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$29,R0
 	BNE @@1
 	PULR R1		; Length.
@@ -2282,7 +2293,7 @@ bas_mode:	PROC
 	CMPI #2,R0
 	BC @@1
 	MVO R0,_mode
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@2
 	CALL bas_expr_int
@@ -2313,10 +2324,10 @@ bas_define:	PROC
 	PSHR R5
 	CALL bas_expr_int
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@1
-	CALL get_next
+	macro_get_next
 	CMPI #$22,R0
 	BNE @@1
 	MVI bas_last_array,R3
@@ -2402,11 +2413,11 @@ bas_sprite:	PROC
 	BC @@1
 	ADDI #_mobs,R0
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@2
 
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BEQ @@4
 	DECR R4
@@ -2414,7 +2425,7 @@ bas_sprite:	PROC
 	PULR R3
 	PSHR R3
 	MVO@ R0,R3
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_COLON,R0
 	BEQ @@3
 	TSTR R0
@@ -2422,7 +2433,7 @@ bas_sprite:	PROC
 	CMPI #$2C,R0
 	BNE @@2
 @@4:
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BEQ @@5
 	DECR R4
@@ -2431,7 +2442,7 @@ bas_sprite:	PROC
 	PSHR R3
 	ADDI #8,R3
 	MVO@ R0,R3
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_COLON,R0
 	BEQ @@3
 	TSTR R0
@@ -2478,10 +2489,10 @@ bas_sound:	PROC
 	PSHR R5
 	CALL bas_expr_int
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@5
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BEQ @@12
 	DECR R4
@@ -2510,7 +2521,7 @@ bas_sound:	PROC
 	MVO R0,$01f0
 	SWAP R0
 	MVO R0,$01F4
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@11
 @@6:
@@ -2525,7 +2536,7 @@ bas_sound:	PROC
 	MVO R0,$01F1
 	SWAP R0
 	MVO R0,$01F5
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@11
 @@7:
@@ -2540,7 +2551,7 @@ bas_sound:	PROC
 	MVO R0,$01F2
 	SWAP R0
 	MVO R0,$01F6
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@11
 @@8:
@@ -2555,7 +2566,7 @@ bas_sound:	PROC
 	MVO R0,$01F3
 	SWAP R0
 	MVO R0,$01F7
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@11
 @@9:
@@ -2568,7 +2579,7 @@ bas_sound:	PROC
 	BEQ @@10
 	CALL bas_expr_int
 	MVO R0,$01F9
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@11
 @@10:
@@ -2602,7 +2613,7 @@ bas_poke:	PROC
 	PSHR R5
 	CALL bas_expr_int
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@1
 	CALL bas_expr_int
@@ -2622,7 +2633,7 @@ bas_on:	PROC
 	PSHR R5
 	CALL bas_expr_int
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_GOTO,R0
 	BEQ @@1
 	CMPI #TOKEN_GOSUB,R0
@@ -2639,7 +2650,7 @@ bas_on:	PROC
 @@3:	DECR R1
 	BEQ @@2
 @@5:
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BEQ @@3
 	TSTR R0		; Reached end of line?
@@ -2656,7 +2667,7 @@ bas_on:	PROC
 	CMPI #TOKEN_GOSUB,R1
 	BNE bas_goto.1
 	PSHR R0
-@@7:	CALL get_next		; Jump over the remaining line data.
+@@7:	macro_get_next		; Jump over the remaining line data.
 	TSTR R0
 	BEQ @@8
 	CMPI #TOKEN_COLON,R0
@@ -2679,12 +2690,12 @@ bas_plot:	PROC
 	PSHR R5
 	CALL bas_expr_int
 	MVO R0,plot_x
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@1
 	CALL bas_expr_int
 	MVO R0,plot_y
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@1
 	CALL bas_expr_int
@@ -2706,12 +2717,12 @@ bas_draw:	PROC
 	PSHR R5
 	CALL bas_expr_int
 	MVO R0,draw_x
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@1
 	CALL bas_expr_int
 	MVO R0,draw_y
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@1
 	CALL bas_expr_int
@@ -2739,17 +2750,17 @@ bas_circle:	PROC
 	PSHR R5
 	CALL bas_expr_int
 	MVO R0,plot_x
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@1
 	CALL bas_expr_int
 	MVO R0,plot_y
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@1
 	CALL bas_expr_int
 	MVO R0,sign_x
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@1
 	CALL bas_expr_int
@@ -3013,7 +3024,7 @@ bas_bk:	PROC
 	CMPI #$240,R0
 	BC @@1
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_EQ,R0
 	BNE @@2
 	CALL bas_expr_int
@@ -3042,7 +3053,7 @@ bas_filename:	PROC
 	MVO@ R0,R5
 	MVII #_filename,R3
 
-	CALL get_next
+	macro_get_next
 	CMPI #$22,R0
 	BNE @@1
 @@2:
@@ -3235,7 +3246,7 @@ bas_expr:	PROC
 	PSHR R5
 	CALL bas_expr1
 	BC @@0		; Jump if string.
-@@2:	CALL get_next
+@@2:	macro_get_next
 	CMPI #TOKEN_OR,R0
 	BNE @@1
 	MOVR R2,R0
@@ -3266,7 +3277,7 @@ bas_expr1:	PROC
 	PSHR R5
 	CALL bas_expr2
 	BC @@0		; Jump if string.
-@@2:	CALL get_next
+@@2:	macro_get_next
 	CMPI #TOKEN_XOR,R0
 	BNE @@1
 	MOVR R2,R0
@@ -3294,7 +3305,7 @@ bas_expr2:	PROC
 	PSHR R5
 	CALL bas_expr3
 	BC @@0		; Jump if string.
-@@2:	CALL get_next
+@@2:	macro_get_next
 	CMPI #TOKEN_AND,R0
 	BNE @@1
 	MOVR R2,R0
@@ -3322,15 +3333,24 @@ bas_expr3:	PROC
 	PSHR R5
 	CALL bas_expr4
 	BC @@7
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_LE,R0
 	BNC @@1
 	CMPI #TOKEN_GT+1,R0
 	BC @@1
-	CMPI #TOKEN_LE,R0
-	BNE @@2
 	PSHR R2
 	PSHR R3
+	MVII #@@table1-TOKEN_LE,R1
+	ADDR R0,R1
+	MVI@ R1,PC
+@@table1:
+	DECLE @@le1
+	DECLE @@ge1
+	DECLE @@ne1
+	DECLE @@eq1
+	DECLE @@lt1
+	DECLE @@gt1
+@@le1:
 	CALL bas_expr4
 	BC bas_type_err
 	PULR R1
@@ -3342,11 +3362,7 @@ bas_expr3:	PROC
 	BNC @@true
 	B @@false
 
-@@2:
-	CMPI #TOKEN_GE,R0
-	BNE @@3
-	PSHR R2
-	PSHR R3
+@@ge1:
 	CALL bas_expr4
 	BC bas_type_err
 	PULR R1
@@ -3357,11 +3373,7 @@ bas_expr3:	PROC
 	BC @@true
 	B @@false
 
-@@3:
-	CMPI #TOKEN_NE,R0
-	BNE @@4
-	PSHR R2
-	PSHR R3
+@@ne1:
 	CALL bas_expr4
 	BC bas_type_err
 	PULR R1
@@ -3372,11 +3384,7 @@ bas_expr3:	PROC
 	BNE @@true
 	B @@false
 
-@@4:
-	CMPI #TOKEN_EQ,R0
-	BNE @@5
-	PSHR R2
-	PSHR R3
+@@eq1:
 	CALL bas_expr4
 	BC bas_type_err
 	PULR R1
@@ -3387,11 +3395,7 @@ bas_expr3:	PROC
 	BEQ @@true
 	B @@false
 
-@@5:
-	CMPI #TOKEN_LT,R0
-	BNE @@6
-	PSHR R2
-	PSHR R3
+@@lt1:
 	CALL bas_expr4
 	BC bas_type_err
 	PULR R1
@@ -3402,9 +3406,7 @@ bas_expr3:	PROC
 	BNC @@true
 	B @@false
 
-@@6:
-	PSHR R2
-	PSHR R3
+@@gt1:
 	CALL bas_expr4
 	BC bas_type_err
 	PULR R1
@@ -3424,7 +3426,7 @@ bas_expr3:	PROC
 	; String comparison
 	;
 @@7:
-	CALL get_next
+	macro_get_next
 	CMPI #TOKEN_LE,R0
 	BNC @@0
 	CMPI #TOKEN_GT+1,R0
@@ -3495,25 +3497,12 @@ bas_expr4:	PROC
 	CALL bas_expr5
 	BC @@3
 @@0:
-	CALL get_next
+	macro_get_next
 	CMPI #$2b,R0
-	BNE @@1
-	PSHR R2
-	PSHR R3
-	CALL bas_expr5
-	BC bas_type_err
-	PULR R1
-	PULR R0
-	PSHR R4
-	CALL fpadd
-	MOVR R0,R2
-	MOVR R1,R3
-	PULR R4
-	B @@0
-
-@@1:
+	BEQ @@1
 	CMPI #$2d,R0
 	BNE @@2
+
 	PSHR R2
 	PSHR R3
 	CALL bas_expr5
@@ -3527,11 +3516,25 @@ bas_expr4:	PROC
 	PULR R4
 	B @@0
 
+@@1:
+	PSHR R2
+	PSHR R3
+	CALL bas_expr5
+	BC bas_type_err
+	PULR R1
+	PULR R0
+	PSHR R4
+	CALL fpadd
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	B @@0
+
 @@2:	DECR R4
 	CLRC
 	PULR PC
 
-@@3:	CALL get_next
+@@3:	macro_get_next
 	CMPI #$2b,R0
 	BNE @@4
 	PSHR R2
@@ -3555,39 +3558,12 @@ bas_expr5:	PROC
 	CALL bas_expr6
 	BC @@3
 @@0:
-	CALL get_next
+	macro_get_next
 	CMPI #$2a,R0
-	BNE @@1
-	PSHR R2
-	PSHR R3
-	CALL bas_expr6
-	BC bas_type_err
-	PULR R1
-	PULR R0
-	PSHR R4
-	CALL fpmul
-	MOVR R0,R2
-	MOVR R1,R3
-	PULR R4
-	B @@0
-
-@@1:
+	BEQ @@1
 	CMPI #$2f,R0
-	BNE @@2
-	PSHR R2
-	PSHR R3
-	CALL bas_expr6
-	BC bas_type_err
-	PULR R1
-	PULR R0
-	PSHR R4
-	CALL fpdiv
-	MOVR R0,R2
-	MOVR R1,R3
-	PULR R4
-	B @@0
-
-@@2:	CMPI #$5e,R0
+	BEQ @@2
+	CMPI #$5e,R0
 	BNE @@4
 	PSHR R2
 	PSHR R3
@@ -3602,16 +3578,49 @@ bas_expr5:	PROC
 	PULR R4
 	B @@0
 
+@@1:
+	PSHR R2
+	PSHR R3
+	CALL bas_expr6
+	BC bas_type_err
+	PULR R1
+	PULR R0
+	PSHR R4
+	CALL fpmul
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	B @@0
+
+@@2:
+	PSHR R2
+	PSHR R3
+	CALL bas_expr6
+	BC bas_type_err
+	PULR R1
+	PULR R0
+	PSHR R4
+	CALL fpdiv
+	MOVR R0,R2
+	MOVR R1,R3
+	PULR R4
+	B @@0
+
 @@4:	DECR R4
 	CLRC
 @@3:	PULR PC
 	ENDP
 
 bas_expr6:	PROC
-	PSHR R5
-	CALL get_next
+	macro_get_next
 	CMPI #$2D,R0	; Minus?
-	BNE @@1
+	BEQ @@1
+	CMPI #TOKEN_NOT,R0	; NOT?
+	BEQ @@2
+	PSHR R5
+	B bas_expr7.99
+@@1:
+	PSHR R5
 	CALL bas_expr7
 	BC bas_type_err
 	MOVR R2,R0
@@ -3621,9 +3630,8 @@ bas_expr6:	PROC
 	MOVR R1,R3
 	CLRC
 	PULR PC
-	
-@@1:	CMPI #TOKEN_NOT,R0	; NOT?
-	BNE @@2
+@@2:
+	PSHR R5
 	CALL bas_expr7
 	BC bas_type_err
 	MOVR R2,R0
@@ -3636,19 +3644,16 @@ bas_expr6:	PROC
 	CLRC
 	PULR PC
 
-@@2:	DECR R4
-	CALL bas_expr7
-	PULR PC
 	ENDP
 
 bas_expr_paren:	PROC
 	PSHR R5
-	CALL get_next
+	macro_get_next
 	CMPI #$28,R0
 	BNE @@1
 	CALL bas_expr
 	GSWD R1		; Save carry flag.
-	CALL get_next
+	macro_get_next
 	CMPI #$29,R0
 	BNE @@1
 	RSWD R1
@@ -3662,8 +3667,8 @@ bas_expr_paren:	PROC
 
 bas_expr7:	PROC
 	PSHR R5
-	CALL get_next
-	
+	macro_get_next
+@@99:	
 	CMPI #TOKEN_FUNC,R0
 	BNC @@6
 	CMPI #TOKEN_FUNC+33,R0
@@ -3849,17 +3854,17 @@ bas_expr7:	PROC
 
 	; POINT(x,y)
 @@POINT:
-	CALL get_next
+	macro_get_next
 	CMPI #$28,R0
 	BNE @@2
 	CALL bas_expr_int
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@2
 	CALL bas_expr_int
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$29,R0
 	BNE @@2
 	PULR R1
@@ -4142,13 +4147,13 @@ bas_expr7:	PROC
 
 	; LEFT$(val,l)
 @@LEFT:
-	CALL get_next
+	macro_get_next
 	CMPI #$28,R0
 	BNE @@2
 	CALL bas_expr
 	BNC bas_type_err
 	PSHR R3
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@2
 	CALL bas_expr
@@ -4157,7 +4162,7 @@ bas_expr7:	PROC
 	MOVR R3,R1
 	CALL fp2int
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$29,R0
 	BNE @@2
 	PULR R2
@@ -4167,13 +4172,13 @@ bas_expr7:	PROC
 
 	; MID$(val,p) or MID$(val,p,l)
 @@MID:
-	CALL get_next
+	macro_get_next
 	CMPI #$28,R0
 	BNE @@2
 	CALL bas_expr
 	BNC bas_type_err
 	PSHR R3
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@2
 	CALL bas_expr
@@ -4183,7 +4188,7 @@ bas_expr7:	PROC
 	CALL fp2int
 	DECR R0		; Starts at one.
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$29,R0
 	BEQ @@19
 	CMPI #$2C,R0
@@ -4194,7 +4199,7 @@ bas_expr7:	PROC
 	MOVR R3,R1
 	CALL fp2int
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$29,R0
 	BNE @@2
 	PULR R2
@@ -4234,13 +4239,13 @@ bas_expr7:	PROC
 
 	; RIGHT$(val,l)
 @@RIGHT:
-	CALL get_next
+	macro_get_next
 	CMPI #$28,R0
 	BNE @@2
 	CALL bas_expr
 	BNC bas_type_err
 	PSHR R3
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@2
 	CALL bas_expr
@@ -4249,7 +4254,7 @@ bas_expr7:	PROC
 	MOVR R3,R1
 	CALL fp2int
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$29,R0
 	BNE @@2
 	PULR R0
@@ -4277,7 +4282,7 @@ bas_expr7:	PROC
 @@25:	CLRR R0
 	MVO@ R0,R5
 	MOVR R3,R4
-	CALL get_next
+	macro_get_next
 	DECR R4
 	CALL fpparse
 	MOVR R0,R2
@@ -4328,7 +4333,7 @@ bas_expr7:	PROC
 	; INSTR(A$,B$)
 	; INSTR(expr,A$,B$)
 @@INSTR:
-	CALL get_next
+	macro_get_next
 	CMPI #$28,R0
 	BNE @@2
 	CALL bas_expr
@@ -4337,7 +4342,7 @@ bas_expr7:	PROC
 	MOVR R3,R1
 	CALL fp2int
 	PSHR R0
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@2
 	CALL bas_expr
@@ -4348,12 +4353,12 @@ bas_expr7:	PROC
 	PSHR R0
 @@INSTR2:
 	PSHR R3
-	CALL get_next
+	macro_get_next
 	CMPI #$2C,R0
 	BNE @@2
 	CALL bas_expr
 	BNC bas_type_err
-	CALL get_next
+	macro_get_next
 	CMPI #$29,R0
 	BNE @@2
 	PULR R2
@@ -4444,7 +4449,7 @@ bas_expr7:	PROC
 
 @@12:	CALL bas_expr
 	GSWD R1
-	CALL get_next
+	macro_get_next
 	CMPI #$29,R0
 	BNE @@2
 	RSWD R1
@@ -4495,7 +4500,7 @@ bas_expr7:	PROC
 	;
 parse_integer:	PROC
 	PSHR R5
-	CALL get_next	
+	macro_get_next	
 	CMPI #$30,R0
 	BNC @@4
 	CMPI #$3A,R0

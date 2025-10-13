@@ -8,6 +8,7 @@
 	; Revision date: Sep/24/2025. Now it handles zero.
 	; Revision date: Oct/03/2025. Output function can be changed (for STR$)
 	; Revision date: Oct/06/2025. Added a floating-point parse function.
+	; Revision date: Oct/13/2025. Optimized number parsing.
 	;
 
 	;
@@ -298,7 +299,7 @@ fpparse:	PROC
 	MVI@ R4,R0	; Read input.
 	CMPI #$2D,R0	; Negative number?
 	BNE @@17	; No, jump.
-	MVII #$FFFF,R0	; Yes, signal it.
+	MVII #$0080,R0	; Yes, signal it.
 	B @@18
 
 @@17:	DECR R4
@@ -322,27 +323,23 @@ fpparse:	PROC
 	BEQ @@4
 	CMPI #$65,R0	; e
 	BEQ @@4
-	CMPI #$30,R0
+	SUBI #$30,R0
 	BNC @@2
-	CMPI #$3A,R0
+	CMPI #$0A,R0
 	BC @@2
 	CMPI #7,R1	; Ignore more than 7 digits.
 	BC @@16
-	SUBI #$30,R0
+	; Carry flag and Overflow flag guaranteed to be zero here.
 	PSHR R0
 	PSHR R1
 	MOVR R2,R0
 	MOVR R3,R1
-	CLRC
-	RLC R3,1
-	RLC R2,1	; x2
-	CLRC
-	RLC R3,1
-	RLC R2,1	; x4
+	RLC R3,2	; x4
+	RLC R2,2
 	ADDR R1,R3
 	ADCR R2
 	ADDR R0,R2	; x5
-	CLRC
+;	CLRC	; Carry flag will be zero always.
 	RLC R3,1
 	RLC R2,1	; x10
 	PULR R1
@@ -453,10 +450,7 @@ fpparse:	PROC
 	BNE @@14
 	PULR R4
 @@12:	PULR R2
-	TSTR R2
-	BPL @@19
-	XORI #$0080,R1
-@@19:
+	XORR R2,R1
 	PULR PC
 
 	ENDP
