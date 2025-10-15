@@ -9,6 +9,7 @@
 	; Revision date: Oct/03/2025. Output function can be changed (for STR$)
 	; Revision date: Oct/06/2025. Added a floating-point parse function.
 	; Revision date: Oct/13/2025. Optimized number parsing.
+	; Revision date: Oct/15/2025. Again optimized number parsing.
 	;
 
 	;
@@ -312,41 +313,37 @@ fpparse:	PROC
 	CLRR R1		; Number of processed digits.
 @@1:
 	MVI@ R4,R0	; Read input.
-	CMPI #$2E,R0	; Period?
-	BNE @@3		; No, jump.
+	SUBI #$30,R0
+	BNC @@16
+	CMPI #$0A,R0
+	BNC @@3
+	CMPI #$15,R0	; E
+	BEQ @@4
+	CMPI #$35,R0	; e
+	BEQ @@4
+@@16:	CMPI #$FFFE,R0	; Period?
+	BNE @@2		; No, jump.
 	TSTR R5		; Already found a period?
 	BPL @@2		; Yes, jump.
 	MOVR R1,R5	; Save period position.
 	B @@1
 @@3:
-	CMPI #$45,R0	; E
-	BEQ @@4
-	CMPI #$65,R0	; e
-	BEQ @@4
-	SUBI #$30,R0
-	BNC @@2
-	CMPI #$0A,R0
-	BC @@2
-	CMPI #7,R1	; Ignore more than 7 digits.
-	BC @@16
+	INCR R1
+	CMPI #8,R1	; Ignore more than 7 digits.
+	BC @@1
 	; Carry flag and Overflow flag guaranteed to be zero here.
-	PSHR R0
-	PSHR R1
-	MOVR R2,R0
-	MOVR R3,R1
+	MVO R2,fptemp1
+	MVO R3,fptemp2
 	RLC R3,2	; x4
 	RLC R2,2
-	ADDR R1,R3
+	ADD fptemp2,R3
 	ADCR R2
-	ADDR R0,R2	; x5
+	ADD fptemp1,R2	; x5
 ;	CLRC	; Carry flag will be zero always.
 	RLC R3,1
 	RLC R2,1	; x10
-	PULR R1
-	PULR R0
 	ADDR R0,R3	; + digit
 	ADCR R2
-@@16:	INCR R1		; Number of digits seen.
 	B @@1
 
 	;

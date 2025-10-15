@@ -17,6 +17,7 @@
 	; Revision date: Oct/12/2025. Optimized integer to floating-point conversion.
 	; Revision date: Oct/13/2025. Optimized addition and multiplication.
 	; Revision date: Oct/14/2025. Optimized division, normalization, fp2int, and fpsgn.
+	; Revision date: Oct/15/2025. Optimized integer conversion to avoid shifts.
 	;
 
 	; Temporary
@@ -435,6 +436,16 @@ fpfromint:	PROC
 @@3:	CLRR R2
 @@4:	PSHR R5
 	PSHR R2
+	;
+	; Preshift 8 bits if the number is small.
+	;
+	CMPI #$0100,R0
+	BC @@5
+	SWAP R0
+	MVII #FPEXP_BIAS+$08,R5
+	; Reuse the normalize code.
+	B fpadd.11	; Normalize
+@@5:
 	MVII #FPEXP_BIAS+$10,R5
 	; Reuse the normalize code.
 	B fpadd.11	; Normalize
@@ -477,6 +488,24 @@ fpfromuint24:	PROC
 @@1:	PSHR R5
 	CLRR R2
 	PSHR R2
+	;
+	; Preshift 8 bits if the number is small.
+	;
+	TSTR R0		; High-word is zero?
+	BNE @@2		; No, jump.
+	MOVR R1,R0
+	CLRR R1
+	CMPI #$0100,R0
+	BC @@3
+	SWAP R0
+	MVII #FPEXP_BIAS+$08,R5
+	; Reuse the normalize code.
+	B fpadd.11	; Normalize
+@@3:
+	MVII #FPEXP_BIAS+$10,R5
+	; Reuse the normalize code.
+	B fpadd.11	; Normalize
+@@2:
 	SWAP R0
 	ANDI #$FF00,R0
 	SWAP R1
