@@ -825,7 +825,7 @@ get_next:	PROC
 	ENDP
     endi
 	MACRO macro_get_next
-	;
+	; Comment required or as1600 fails.
 macgn%%:
 	MVI@ R4,R0
 	CMPI #$20,R0
@@ -1587,10 +1587,7 @@ bas_goto:	PROC
 @@1:	; Entry point for ON GOTO
 	CALL line_search
 	CMPR R1,R0
-	BEQ @@3
-	MVII #ERR_LINE,R0
-	CALL bas_error
-@@3:
+	BNE @@3
 	PSHR R4
 	CALL SCAN_KBD
 	PULR R4
@@ -1601,6 +1598,9 @@ bas_goto:	PROC
 @@4:
 	MVII #STACK,R6
 	B bas_run.1
+
+@@3:	MVII #ERR_LINE,R0
+	CALL bas_error
 
 @@0:	MVII #ERR_SYNTAX,R0
 	CALL bas_error
@@ -4503,22 +4503,26 @@ bas_expr7:	PROC
 parse_integer:	PROC
 	PSHR R5
 	macro_get_next	
-	CMPI #$30,R0
-	BNC @@4
-	CMPI #$3A,R0
-	BC @@4
-	CLRR R2
-@@1:
 	SUBI #$30,R0
+	BNC @@4
+	CMPI #$0A,R0
+	BC @@4
+	MOVR R0,R2
+	MVI@ R4,R0
+	SUBI #$30,R0
+	BNC @@3
+	CMPI #$0A,R0
+	BC @@3
+@@1:
 	MOVR R2,R1
 	SLL R2,2	; x4
 	ADDR R1,R2	; x5
 	ADDR R2,R2	; x10
 	ADDR R0,R2
 @@2:	MVI@ R4,R0
-	CMPI #$30,R0
+	SUBI #$30,R0
 	BNC @@3
-	CMPI #$3A,R0
+	CMPI #$0A,R0
 	BNC @@1
 @@3:
 	DECR R4
@@ -5057,9 +5061,8 @@ SCAN_KBD    PROC
            BNEQ    @@maybe_key
 
 @@cont_col: ADDI    #6,     R2
-           SLR     R1
-           CMPI    #$FF,   R1
-           BNEQ    @@col
+           RRC R1,1
+           BC    @@col
 
            MVII    #KEY.NONE,  R0
            B       @@none

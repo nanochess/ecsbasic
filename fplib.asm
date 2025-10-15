@@ -16,6 +16,7 @@
 	; Revision date: Oct/05/2025. Added fpfromuint24.
 	; Revision date: Oct/12/2025. Optimized integer to floating-point conversion.
 	; Revision date: Oct/13/2025. Optimized addition and multiplication.
+	; Revision date: Oct/14/2025. Optimized division, normalization, fp2int, and fpsgn.
 	;
 
 	; Temporary
@@ -137,7 +138,20 @@ fpadd:	PROC
 	DECR R5
 	ADDR R1,R1
 	RLC R0,1
+	BC @@15
+	DECR R5
+	ADDR R1,R1
+	RLC R0,1
+	BC @@15
+	DECR R5
+	ADDR R1,R1
+	RLC R0,1
+	BC @@15
+	DECR R5
+	ADDR R1,R1
+	RLC R0,1
 	BNC @@11	; This loop manages to eliminate the top bit.
+@@15:
 	; Rounding, so 1.0 / 3.0 * 3.0 becomes 1.0
 	; >>> START
 	MOVR R1,R2
@@ -285,35 +299,33 @@ fpdiv:	PROC
 	RRC R2,1
 	RRC R3,1
 
+	;
+	; Hack: It needs a single bit shifting, but we have
+	;       few registers. So the code is split in two parts
+	;       to avoid using temporary variables.
+	;
 	MOVR R0,R4
 	MOVR R1,R5
-	MVII #$8000,R0
-	MVO R0,fptemp1
+	MVII #$8000,R1
 	CLRR R0
-	MVO R0,fptemp2
-	CLRR R1
+
+	;
+	; First 16 bits.
+	;
 @@2:	CMPR R2,R4
-	BNC @@3
-	BNE @@4
+	BNC @@4
+	BNE @@3
 	CMPR R3,R5
-	BNC @@3
-@@4:
+	BNC @@4
+@@3:
 	; It is bigger than the divisor.
 	SUBR R3,R5
 	DECR R4
 	ADCR R4
 	SUBR R2,R4
-	ADD fptemp1,R0
-	ADD fptemp2,R1
-@@3:	PSHR R0
-	CLRC
-	MVI fptemp1,R0
-	RRC R0,1
-	MVO R0,fptemp1
-	MVI fptemp2,R0
-	RRC R0,1
-	MVO R0,fptemp2
-	PULR R0
+	ADDR R1,R0
+@@4:	SLR R1,1
+	BEQ @@14
 	CLRC
 	RRC R2,1
 	RRC R3,1
@@ -321,12 +333,51 @@ fpdiv:	PROC
 	TSTR R4
 	BNE @@5
 	TSTR R5
-	BEQ @@6
+	BEQ @@12
 @@5:
 	TSTR R2
 	BNE @@2
 	CMPI #$40,R3
 	BC @@2
+@@12:	CLRR R1		; Build full mantissa.
+	B @@6
+
+	;
+	; Next 9 bits.
+	;
+@@14:	MVO R0,fptemp1
+	MVII #$8000,R0
+	; R1 guaranteed to be zero
+	B @@11
+
+@@7:	CMPR R2,R4
+	BNC @@9
+	BNE @@8
+	CMPR R3,R5
+	BNC @@9
+@@8:
+	; It is bigger than the divisor.
+	SUBR R3,R5
+	DECR R4
+	ADCR R4
+	SUBR R2,R4
+	ADDR R0,R1
+@@9:	SLR R0,1
+@@11:	CLRC
+	RRC R2,1
+	RRC R3,1
+	; Again try to exit early
+	TSTR R4
+	BNE @@10
+	TSTR R5
+	BEQ @@15
+@@10:
+	TSTR R2
+	BNE @@7
+	CMPI #$40,R3
+	BC @@7
+@@15:
+	MVI fptemp1,R0	; Build full mantissa.
 @@6:
 	PULR R5		; Restore exponent
 	; Reuse the normalize code.
@@ -352,16 +403,13 @@ fpcomp:	PROC
 	XORI #$0080,R5	; So negative sign is lesser.
 	CMPR R5,R4
 	BNE @@1
-	SETC		; Restore bit one in mantissa
-	RRC R0,1
-	RRC R1,1
-	SETC		; Restore bit one in mantissa
-	RRC R2,1
-	RRC R3,1
-	CMPR R2,R0
-	BNE @@1
-	ANDI #$FF80,R1
-	ANDI #$FF80,R3
+	;
+	; Hack: It doesn't need to insert the fixed one bit.
+	;
+	CMPR R2,R0	; Are both mantissas equal?
+	BNE @@1		; No, jump.
+	ANDI #$FF00,R1
+	ANDI #$FF00,R3
 	CMPR R3,R1
 @@1:
 	PULR PC
@@ -544,13 +592,12 @@ fpfloor:	PROC
 	; Output: r0 = Integer.
 	;
 fp2int:	PROC
-	PSHR R5
-	MOVR R1,R5
-	ANDI #$007F,R5
+	MOVR R1,R3
+	ANDI #$007F,R3
 	SETC
 	RRC R0,1
 	MVII #FPEXP_BIAS+$0f,R2
-	SUBR R5,R2
+	SUBR R3,R2
 	BEQ @@2
 	BPL @@1
 	MVII #$7FFF,R0	; Too big.
@@ -558,7 +605,7 @@ fp2int:	PROC
 
 @@1:	CMPI #$10,R2
 	BNC @@4
-	CLRR R0
+	CLRR R0		; Too small.
 	B @@2
 
 @@4:	SLR R0,1
@@ -567,7 +614,7 @@ fp2int:	PROC
 @@2:	ANDI #$0080,R1
 	BEQ @@3
 	NEGR R0
-@@3:	PULR PC
+@@3:	MOVR R5,PC
 	ENDP
 
 	;
@@ -578,27 +625,26 @@ fp2int:	PROC
 	; Output: r0 = Integer.
 	;
 fp2uint:	PROC
-	PSHR R5
-	MOVR R1,R5
-	ANDI #$007F,R5
+	MOVR R1,R3
+	ANDI #$007F,R3
 	SETC
 	RRC R0,1
 	MVII #FPEXP_BIAS+$0f,R2
-	SUBR R5,R2
+	SUBR R3,R2
 	BEQ @@2
 	BPL @@1
-	MVII #$7FFF,R0	; Too big.
+	MVII #$FFFF,R0	; Too big.
 	B @@2
 
 @@1:	CMPI #$10,R2
 	BNC @@4
-	CLRR R0
+	CLRR R0		; Too small.
 	B @@2
 
 @@4:	SLR R0,1
 	DECR R2
 	BNE @@4
-@@2:	PULR PC
+@@2:	MOVR R5,PC
 	ENDP
 
 	;
@@ -634,14 +680,9 @@ fpsgn:	PROC
 	CLRR R1		; 0.0
 	MOVR R5,PC
 @@1:
-	CLRR R0
 	ANDI #$0080,R1
-	BNE @@2
-	MVII #$003F,R1	; 1.0
+	ADDI #$003F,R1	; 1.0 / -1.0
 	MOVR R5,PC
-
-@@2:	MVII #$00BF,R1	; -1.0
-	MOVR R5,PC	
 	ENDP
 
 	;
