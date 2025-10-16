@@ -3239,10 +3239,7 @@ bas_type_err:	PROC
 	ENDP
 
 	;
-	; Expression evaluation
-	; The type is passed in the Carry flag.
-	; Carry flag clear = Number.
-	; Carry flag set = String.
+	; Process an expression.
 	;
 bas_expr:	PROC
 	PSHR R5
@@ -5085,14 +5082,14 @@ SCAN_KBD    PROC
            BNOV    @@cont_col      ; row 5
 @@got_key1: INCR    R4
 @@got_key:
-           ADDR    R3,     R4      ; add modifier offset
-           MVI@    R4,     R0
+           ADDR    R4,     R3      ; add modifier offset
+           MVI@    R3,     R0
 
            CMPI    #KEY.NONE, R0   ; if invalid, keep scanning
            BEQ     @@cont_col
 
-           CMP     ECS_KEY_LAST, R0
-@@none:     MVO     R0,         ECS_KEY_LAST
+           CMP     ECS_KEY_LAST, R4
+@@none:     MVO     R4,         ECS_KEY_LAST
            BNEQ    @@new
            MVII    #KEY.NONE,  R0
 

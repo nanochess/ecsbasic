@@ -10,6 +10,8 @@
 	; Revision date: Oct/06/2025. Added a floating-point parse function.
 	; Revision date: Oct/13/2025. Optimized number parsing.
 	; Revision date: Oct/15/2025. Again optimized number parsing.
+	; Revision date: Oct/16/2025. Speed up of number parsing using 16-bit routine
+	;                             for the first 4 digits.
 	;
 
 	;
@@ -331,9 +333,12 @@ fpparse:	PROC
 	INCR R1
 	CMPI #8,R1	; Ignore more than 7 digits.
 	BC @@1
-	; Carry flag and Overflow flag guaranteed to be zero here.
-	MVO R2,fptemp1
 	MVO R3,fptemp2
+	CMPI #5,R1
+	BNC @@21
+	; Overflow flag guaranteed to be zero here.
+	MVO R2,fptemp1
+	CLRC
 	RLC R3,2	; x4
 	RLC R2,2
 	ADD fptemp2,R3
@@ -344,6 +349,14 @@ fpparse:	PROC
 	RLC R2,1	; x10
 	ADDR R0,R3	; + digit
 	ADCR R2
+	B @@1
+
+@@21:	; Carry flag and Overflow flag guaranteed to be zero here.
+	MVO R3,fptemp2
+	RLC R3,2
+	ADD fptemp2,R3
+	RLC R3,1
+	ADDR R0,R3
 	B @@1
 
 	;
