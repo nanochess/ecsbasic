@@ -11,7 +11,9 @@
 	; Revision date: Oct/13/2025. Optimized number parsing.
 	; Revision date: Oct/15/2025. Again optimized number parsing.
 	; Revision date: Oct/16/2025. Speed up of number parsing using 16-bit routine
-	;                             for the first 4 digits.
+	;                             for the first 4 digits. More precise exponent
+	;                             handling for parsing floating-point numbers
+	;                             using a table.
 	;
 
 	;
@@ -22,24 +24,31 @@ fpprint:	PROC
 	MOVR R1,R2
 	ANDI #$7F,R2	; Special case: Is it zero?
 	BNE @@14
+	TSTR R3
+	BEQ @@15
 	MVII #$20,R0
 	CALL indirect_output
-	MVII #$30,R0
+@@15:	MVII #$30,R0
 	CALL indirect_output
 	PULR PC
 @@14:
 	MOVR R1,R2
-	MVII #$20,R3
 	ANDI #$80,R2
-	BEQ @@7
+	BNE @@7
+	TSTR R3
+	BEQ @@16
+	MVII #$20,R3
+	B @@17
+@@7:
 	ANDI #$FF7F,R1	; Make it positive
 	MVII #$2D,R3
-@@7:	PSHR R0
+@@17:	PSHR R0
 	PSHR R1
 	MOVR R3,R0
 	CALL indirect_output
 	PULR R1
 	PULR R0
+@@16:
 	PSHR R0
 	PSHR R1
 	MVII #$312D,R2	; Biggest integer in 24-bit
@@ -434,28 +443,260 @@ fpparse:	PROC
 	PSHR R4
 	; It should use a table to avoid precision loss.
 	BPL @@14
+	NEGR R2
 @@15:
+	CMPI #11,R2
+	BNC @@25
+	SUBI #10,R2
+	MVII #10,R3
+	B @@22
+@@25:
+	MOVR R2,R3
+	CLRR R2
+@@22:	SLL R3,1
+	MVII #fptable-2,R5
+	ADDR R3,R5
 	PSHR R2
-	MVII #$4000,R2	; 10.0
-	MVII #$0042,R3
+	MVI@ R5,R2
+	MVI@ R5,R3
 	CALL fpdiv
 	PULR R2
-	INCR R2
+	TSTR R2
 	BNE @@15
 	PULR R4
 	B @@12
 
 @@14:
+	CMPI #11,R2
+	BNC @@23
+	SUBI #10,R2
+	MVII #10,R3
+	B @@24
+@@23:
+	MOVR R2,R3
+	CLRR R2
+@@24:	SLL R3,1
+	MVII #fptable-2,R5
+	ADDR R3,R5
 	PSHR R2
-	MVII #$4000,R2	; 10.0
-	MVII #$0042,R3
+	MVI@ R5,R2
+	MVI@ R5,R3
 	CALL fpmul
 	PULR R2
-	DECR R2
+	TSTR R2
 	BNE @@14
 	PULR R4
 @@12:	PULR R2
 	XORR R2,R1
 	PULR PC
+	ENDP
 
+fptable:
+	DECLE $4000,$0042	; 10.0
+	DECLE $9000,$0045	; 100.0
+	DECLE $F400,$0048	; 1000.0
+	DECLE $3880,$004C	; 10000.0
+	DECLE $86A0,$004F	; 100000.0
+	DECLE $E848,$0052	; 1000000.0
+	DECLE $312D,$0056	; 10000000.0
+	DECLE $7D78,$4059	; 100000000.0
+	DECLE $DCD6,$505C	; 1000000000.0
+	DECLE $2A05,$F260	; 10000000000.0
+
+	;
+	; Parse a floating-point number for tokenization.
+	;
+fptokenparse:	PROC
+	PSHR R5
+	CLRR R2		; 32-bit integer, but only 24 bits used.
+	CLRR R3
+	MVII #$FFFF,R5	; Period position (-1 for none).
+	CLRR R1		; Number of processed digits.
+@@1:
+	MVI@ R4,R0	; Read input.
+	ANDI #$0FF8,R0
+	SLR R0,2
+	SLR R0,1	
+	SUBI #$10,R0
+	BNC @@16
+	CMPI #$0A,R0
+	BNC @@3
+	CMPI #$15,R0	; E
+	BEQ @@4
+	CMPI #$35,R0	; e
+	BEQ @@4
+@@16:	CMPI #$FFFE,R0	; Period?
+	BNE @@2		; No, jump.
+	TSTR R5		; Already found a period?
+	BPL @@2		; Yes, jump.
+	MOVR R1,R5	; Save period position.
+	B @@1
+@@3:
+	INCR R1
+	CMPI #8,R1	; Ignore more than 7 digits.
+	BC @@1
+	MVO R3,fptemp2
+	CMPI #5,R1
+	BNC @@21
+	MVO R2,fptemp1
+	SLLC R3,2	; x4
+	RLC R2,2
+	ADD fptemp2,R3
+	ADCR R2
+	ADD fptemp1,R2	; x5
+	SLLC R3,1
+	RLC R2,1	; x10
+	ADDR R0,R3	; + digit
+	ADCR R2
+	B @@1
+
+@@21:	
+	SLL R3,2
+	ADD fptemp2,R3
+	SLL R3,1
+	ADDR R0,R3
+	B @@1
+
+	;
+	; Exponent handling.
+	;
+@@4:	
+	MVI@ R4,R0	; Read input.
+	ANDI #$0FF8,R0
+	SLR R0,2
+	SLR R0,1	
+	CMPI #$0B,R0	; +
+	BEQ @@5
+	CMPI #$0D,R0	; -
+	BEQ @@5
+	DECR R4
+	MVII #$0B,R0	; +
+@@5:	PSHR R1
+	PSHR R0
+	CLRR R1
+	MVI@ R4,R0	; Read input.
+	ANDI #$0FF8,R0
+	SLR R0,2
+	SLR R0,1	
+	CMPI #$10,R0
+	BNC @@6
+	CMPI #$1A,R0
+	BC @@6
+	SUBI #$10,R0
+	MOVR R0,R1
+	MVI@ R4,R0
+	CMPI #$10,R0
+	BNC @@6
+	CMPI #$1A,R0
+	BC @@6
+	DECR R4
+	MOVR R1,R0
+	SLL R1,2	; x4
+	ADDR R0,R1	; x5
+	SLL R1,1	; x10
+	ADD@ R4,R1
+	SUBI #$10,R1
+	INCR R4
+@@6:	DECR R4
+	PULR R0
+	CMPI #$0B,R0
+	BEQ @@7
+	NEGR R1
+@@7:	MOVR R1,R0
+	PULR R1
+	B @@8
+
+	;
+	; Parsing ended.
+	;
+@@2:	DECR R4
+	CLRR R0		; No exponent offset.
+@@8:	TSTR R5		; Period?
+	BPL @@26	; Yes, jump. It isn't an integer.
+	TSTR R0		; Exponent?
+	BNE @@26	; Yes, jump. It isn't an integer.
+	TSTR R2		; Bigger than 65535?
+	BNE @@26	; Yes, jump. It isn't an integer.
+	MOVR R3,R0
+	CLRC		; Integer.
+	PULR PC
+
+@@26:	PSHR R0		; Exponent offset.
+	PSHR R1		; Digits processed.
+	PSHR R5		; Period position.
+	MOVR R2,R0
+	MOVR R3,R1
+	CALL fpfromuint24
+	PULR R5		; Period position.
+	PULR R3		; Digits processed.
+	PULR R2		; Exponent offset.
+	TSTR R5		; Any fraction?
+	BMI @@11	; No, jump.
+	CMPI #7,R5	; Fraction point inside the number?
+	BNC @@10	; Yes, jump.
+	SUBI #7,R5	; Only add extra integer digits to the exponent offset.
+	ADDR R5,R2
+	B @@9
+
+@@10:	CMPI #7,R3	; Processed more than 7 digits?
+	BNC @@20	; No, jump.
+	MVII #7,R3	; Yes, limit to the 7 digits available.
+@@20:	SUBR R5,R3	; Subtract the period position.
+	SUBR R3,R2	; Adjust exponent offset.
+	B @@9
+
+@@11:	SUBI #7,R3	; Processed more than 7 digits?
+	BNC @@9		; No, jump and use as it is.
+	ADDR R3,R2	; Adjust exponent offset.
+	; Final exponent here.
+@@9:	TSTR R2
+	BEQ @@12
+	PSHR R4
+	; It should use a table to avoid precision loss.
+	BPL @@14
+	NEGR R2
+@@15:
+	CMPI #11,R2
+	BNC @@25
+	SUBI #10,R2
+	MVII #10,R3
+	B @@22
+@@25:
+	MOVR R2,R3
+	CLRR R2
+@@22:	SLL R3,1
+	MVII #fptable-2,R5
+	ADDR R3,R5
+	PSHR R2
+	MVI@ R5,R2
+	MVI@ R5,R3
+	CALL fpdiv
+	PULR R2
+	TSTR R2
+	BNE @@15
+	PULR R4
+	B @@12
+
+@@14:
+	CMPI #11,R2
+	BNC @@23
+	SUBI #10,R2
+	MVII #10,R3
+	B @@24
+@@23:
+	MOVR R2,R3
+	CLRR R2
+@@24:	SLL R3,1
+	MVII #fptable-2,R5
+	ADDR R3,R5
+	PSHR R2
+	MVI@ R5,R2
+	MVI@ R5,R3
+	CALL fpmul
+	PULR R2
+	TSTR R2
+	BNE @@14
+	PULR R4
+@@12:	SETC		; Floating-point number.
+	PULR PC
 	ENDP

@@ -110,6 +110,13 @@ TOKEN_SPC:	EQU TOKEN_START+$5e
 TOKEN_TAB:	EQU TOKEN_START+$5f
 TOKEN_AT:	EQU TOKEN_START+$60
 
+TOKEN_NUMBER:	EQU $0d
+TOKEN_INTEGER:	EQU $08
+
+COLOR_TEXT:	EQU $07
+COLOR_TOKEN:	EQU $07
+COLOR_NUMBER:	EQU $07
+
 	;
 	; Error numbers.
 	;
@@ -948,14 +955,61 @@ bas_tokenize:	PROC
 	CMPI #$02,R0
 	BNE @@15
 	ADDI #$20,R0
-	CMPI #basic_buffer_end+1,R3
-	BEQ @@21
+	CMPI #basic_buffer_end,R3
+	BC @@21
 	MVO@ R0,R3
 	INCR R3
 	B @@6
 
-@@14:	CMPI #$1A,R0		; ASCII character $20-$39?
+@@14:	CMPI #$0E,R0
+	BEQ @@22
+	CMPI #$10,R0		; ASCII character $20-$39?
 	BNC @@20
+	CMPI #$1A,R0
+	BC @@23
+@@22:	DECR R4
+	PSHR R3
+	CALL fptokenparse
+	PULR R3
+	BNC @@24	
+	CMPI #basic_buffer_end-4,R3
+	BC @@21
+	MVII #TOKEN_NUMBER,R2
+	MVO@ R2,R3
+	INCR R3
+	MOVR R1,R2
+	ANDI #$00FF,R2
+	MVO@ R2,R3
+	INCR R3
+	SWAP R1
+	ANDI #$00FF,R1
+	MVO@ R1,R3
+	INCR R3
+	MOVR R0,R2
+	ANDI #$00FF,R2
+	MVO@ R2,R3
+	INCR R3
+	SWAP R0
+	ANDI #$00FF,R0
+	MVO@ R0,R3
+	INCR R3
+	B @@16
+@@24:	
+	CMPI #basic_buffer_end-2,R3
+	BC @@21
+	MVII #TOKEN_INTEGER,R2
+	MVO@ R2,R3
+	INCR R3
+	MOVR R0,R2
+	ANDI #$00FF,R2
+	MVO@ R2,R3
+	INCR R3
+	SWAP R0
+	ANDI #$00FF,R0
+	MVO@ R0,R3
+	INCR R3
+	B @@16
+@@23:
 	DECR R4
 	MVII #keywords,R2
 	MVII #TOKEN_START,R5
@@ -1111,7 +1165,7 @@ bas_execute:	PROC
 @@3:	PSHR R5
 	DECR R4
 	CALL get_var_addr.0
-	PSHR R5
+	PSHR R1
 	macro_get_next
 	CMPI #TOKEN_EQ,R0
 	BNE @@1
@@ -1201,6 +1255,8 @@ bas_generic_list:	PROC
 	BC @@2
 @@15:
 	PSHR R4
+	MVII #COLOR_TEXT,R1
+	MVO R1,bas_curcolor
 	CALL PRNUM16.l	; Print line number.
 	MVII #$20,R0	; Space.
 	CALL indirect_output
@@ -1210,15 +1266,52 @@ bas_generic_list:	PROC
 	MVI@ R4,R0
 	TSTR R0
 	BEQ @@3
+	CMPI #TOKEN_NUMBER,R0
+	BEQ @@5
+	CMPI #TOKEN_INTEGER,R0
+	BEQ @@14
 	CMPI #TOKEN_START,R0
-	BC @@5
+	BC @@16
+	MVII #COLOR_TEXT,R1
+	MVO R1,bas_curcolor
 	PSHR R4
 	CALL indirect_output
 	PULR R4
 	B @@4
 
+	; Tokenized floating-point number.
+@@5:	MVII #COLOR_NUMBER,R1
+	MVO R1,bas_curcolor
+	MVI@ R4,R1
+	MVI@ R4,R2
+	SWAP R2
+	ADDR R2,R1
+	MVI@ R4,R0
+	MVI@ R4,R2
+	SWAP R2
+	ADDR R2,R0
+	PSHR R4
+	CLRR R3
+	CALL fpprint
+	PULR R4
+	B @@4
+
+	; Tokenized integer.
+@@14:	MVII #COLOR_NUMBER,R1
+	MVO R1,bas_curcolor
+	MVI@ R4,R0
+	MVI@ R4,R1
+	SWAP R1
+	ADDR R1,R0
+	PSHR R4
+	CALL PRNUM16.l
+	PULR R4
+	B @@4
+
 	; Token
-@@5:	MVII #keywords,R5
+@@16:	MVII #COLOR_TOKEN,R1
+	MVO R1,bas_curcolor
+	MVII #keywords,R5
 	SUBI #TOKEN_START,R0
 	BEQ @@6
 @@7:	MVI@ R5,R1
@@ -1246,7 +1339,9 @@ bas_generic_list:	PROC
 	PULR R4
 	B @@1
 
-@@2:	PULR R4
+@@2:	MVII #COLOR_TEXT,R1
+	MVO R1,bas_curcolor
+	PULR R4
 	PULR PC
 
 	ENDP
@@ -1470,6 +1565,7 @@ bas_generic_print:	PROC
 	PSHR R4
 	MOVR R2,R0
 	MOVR R3,R1
+	MVII #1,R3
 	CALL fpprint
 	PULR R4
 	B @@3
@@ -1546,14 +1642,15 @@ bas_input:	PROC
 	PSHR R4
 	PSHR R0
 	CALL bas_get_line
-	CALL bas_expr
-	PULR R0
-	SUBI #$41,R0
-	SLL R0,1
+	macro_get_next
+	CALL fpparse
+	PULR R2
+	SUBI #$41,R2
+	SLL R2,1
 	MVII #variables,R5
-	ADDR R0,R5
-	MVO@ R2,R5
-	MVO@ R3,R5
+	ADDR R2,R5
+	MVO@ R0,R5
+	MVO@ R1,R5
 	PULR R4
 	PULR PC
 
@@ -1636,10 +1733,8 @@ bas_if:	PROC
 	CMPI #TOKEN_THEN,R0
 	BNE @@2
 	macro_get_next
-	CMPI #$30,R0
-	BNC @@3
-	CMPI #$3A,R0
-	BC @@3
+	CMPI #TOKEN_INTEGER,R0
+	BNE @@3
 	DECR R4
 	B bas_goto.0
 @@3:
@@ -1657,6 +1752,14 @@ bas_if:	PROC
 	PSHR R5
 	macro_get_next
 	PULR R5
+	CMPI #TOKEN_INTEGER,R0
+	BNE @@7
+	ADDI #2,R4
+@@7:
+	CMPI #TOKEN_NUMBER,R0
+	BNE @@8
+	ADDI #4,R4
+@@8:
 	TSTR R0		; Reached end of line?
 	BEQ @@4		; Yes, no ELSE found.
 	CMPI #TOKEN_THEN,R0
@@ -1713,11 +1816,11 @@ get_var_addr:	PROC
 	CMPI #$5B,R0
 	BC @@1
 @@0:
-	PSHR R5
 	MOVR R0,R2
 	macro_get_next
 	CMPI #$28,R0		; Array?
 	BNE @@2			; No, jump.
+	PSHR R5
 	PSHR R2
 	CALL bas_expr
 	MOVR R2,R0
@@ -1729,35 +1832,34 @@ get_var_addr:	PROC
 	CMPI #$29,R0
 	BNE @@1
 	PSHR R4
-	MVI bas_arrays,R3
-@@3:	MVI@ R3,R4
+	MVI bas_arrays,R1
+@@3:	MVI@ R1,R4
 	TSTR R4		; End of arrays?
 	BEQ @@5
-	CMP@ R3,R2	; Name comparison.
+	CMP@ R1,R2	; Name comparison.
 	BEQ @@4		; Jump if found.
 	INCR R3
-	MVI@ R3,R0
-	INCR R3
+	MVI@ R1,R0
+	INCR R1
 	SLL R0,1	; Length x2.
-	ADDR R0,R3
+	ADDR R0,R1
 	B @@3
 
-@@4:	INCR R3		; Jump over name.
+@@4:	INCR R1		; Jump over name.
 	PULR R4		; Restore parsing position.
 	PULR R0		; Restore desired index.
-	CMP@ R3,R0
+	CMP@ R1,R0
 	BC @@6
-	INCR R3
+	INCR R1
 	SLL R0,1
-	ADDR R0,R3
-	MOVR R3,R5
+	ADDR R0,R1
 	PULR PC
 
 @@2:	DECR R4
 	SLL R2,1
-	MVII #variables-$41*2,R5
-	ADDR R2,R5
-	PULR PC
+	MVII #variables-$41*2,R1
+	ADDR R2,R1
+	MOVR R5,PC
 
 @@1:	MVII #ERR_SYNTAX,R0
 	CALL bas_error
@@ -1782,8 +1884,8 @@ bas_for:	PROC
 	macro_get_next
 	CALL get_var_addr
 	MVI bas_forptr,R3
-	MVO@ R5,R3		; Take note of the variable.
-	PSHR R5
+	MVO@ R1,R3		; Take note of the variable.
+	PSHR R1
 	macro_get_next
 	CMPI #TOKEN_EQ,R0
 	BNE @@2
@@ -1855,7 +1957,7 @@ bas_next:	PROC
 @@3:	CMPI #start_for,R3
 	BEQ @@0
 	SUBI #5,R3
-	CMP@ R3,R5		; Find in FOR stack
+	CMP@ R3,R1		; Find in FOR stack
 	BNE @@3
 	B @@4
 
@@ -1940,6 +2042,7 @@ bas_gosub:	PROC
 	CALL parse_integer
 	BC @@0
 @@1:	; Entry point for ON GOSUB
+	MOVR R0,R2
 	CALL get_next_point
 	MVI bas_gosubptr,R5
 	CMPI #end_gosub-2,R5
@@ -1992,10 +2095,20 @@ bas_return:	PROC
 	;
 bas_rem:	PROC
 @@1:	MVI@ R4,R0
+	CMPI #TOKEN_NUMBER,R0
+	BEQ @@2
+	CMPI #TOKEN_INTEGER,R0
+	BEQ @@3
 	TSTR R0
 	BNE @@1
 	DECR R4
 	MOVR R5,PC
+
+@@2:	ADDI #4,R4
+	B @@1
+
+@@3:	ADDI #2,R4
+	B @@1
 	ENDP
 
 	;
@@ -2014,7 +2127,13 @@ data_locate:	PROC
 @@2:	MVI@ R4,R0	; Read tokenized line.
 	TSTR R0		; End of line?
 	BEQ @@3		; Yes, jump.
-	CMPI #TOKEN_DATA,R0	; Found DATA statement?
+	CMPI #TOKEN_NUMBER,R0
+	BNE @@4
+	ADDI #4,R4
+@@4:	CMPI #TOKEN_INTEGER,R0
+	BNE @@5
+	ADDI #2,R4
+@@5:	CMPI #TOKEN_DATA,R0	; Found DATA statement?
 	BNE @@2		; No, jump.
 	PULR PC
 
@@ -2142,7 +2261,7 @@ bas_read:	PROC
 @@14:	DECR R4
 	CALL get_var_addr.0
 	PSHR R4
-	PSHR R5
+	PSHR R1
 	MVI bas_dataptr,R4
 	TSTR R4
 	BEQ @@6
@@ -2152,16 +2271,42 @@ bas_read:	PROC
 	CMPI #$20,R0	; Avoid spaces
 	BEQ @@8
 	CMPI #$2D,R0
-	BEQ @@3
-	CMPI #$30,R0
-	BNC @@4
-	CMPI #$3A,R0
-	BNC @@3
-	CMPI #$2E,R0
-	BEQ @@3
+	BEQ @@24
+	CLRR R3
+	CMPI #TOKEN_INTEGER,R0
+	BEQ @@23
+	CMPI #TOKEN_NUMBER,R0
+	BEQ @@23
+	B @@2
 
+@@24:	MVII #1,R3
+	MVI@ R4,R0
+@@23:	PSHR R3
+	CMPI #TOKEN_INTEGER,R0
+	BNE @@26
+	MVI@ R4,R0
+	MVI@ R4,R1
+	SWAP R1
+	ADDR R1,R0
+	CALL fpfromuint
+	B @@3
+
+@@26:	CMPI #TOKEN_NUMBER,R0
+	BNE @@2
+	MVI@ R4,R1
+	MVI@ R4,R2
+	SWAP R2
+	ADDR R2,R1
+	MVI@ R4,R0
+	MVI@ R4,R2
+	SWAP R2
+	ADDR R2,R0
 	; Number identified.
-@@3:	CALL fpparse
+@@3:	PULR R3
+	TSTR R3
+	BEQ @@27
+	CALL fpneg
+@@27:
 	PULR R5
 	MVO@ R0,R5	; Save into variable
 	MVO@ R1,R5
@@ -2214,7 +2359,13 @@ bas_read:	PROC
 	;
 bas_data:	PROC
 @@1:	MVI@ R4,R0
-	CMPI #TOKEN_COLON,R0
+	CMPI #TOKEN_NUMBER,R0
+	BNE @@3
+	ADDI #4,R4
+@@3:	CMPI #TOKEN_INTEGER,R0
+	BNE @@4
+	ADDI #2,R4
+@@4:	CMPI #TOKEN_COLON,R0
 	BEQ @@2
 	TSTR R0
 	BNE @@1
@@ -2663,6 +2814,14 @@ bas_on:	PROC
 	BEQ @@2
 @@5:
 	macro_get_next
+	CMPI #TOKEN_INTEGER,R0
+	BNE @@9
+	ADDI #2,R4
+@@9:
+	CMPI #TOKEN_NUMBER,R0
+	BNE @@10
+	ADDI #4,R4
+@@10:
 	CMPI #$2C,R0
 	BEQ @@3
 	TSTR R0		; Reached end of line?
@@ -2682,6 +2841,14 @@ bas_on:	PROC
 @@7:	macro_get_next		; Jump over the remaining line data.
 	TSTR R0
 	BEQ @@8
+	CMPI #TOKEN_INTEGER,R0
+	BNE @@11
+	ADDI #2,R4
+@@11:
+	CMPI #TOKEN_NUMBER,R0
+	BNE @@12
+	ADDI #4,R4
+@@12:
 	CMPI #TOKEN_COLON,R0
 	BEQ @@8
 	CMPI #TOKEN_ELSE,R0
@@ -4327,6 +4494,7 @@ bas_expr7:	PROC
 	MVO R2,bas_func
 	CLRR R2
 	MVO R2,temp1
+	MVII #1,R3
 	CALL fpprint
 	MVII #basic_buffer,R0
 	MVI temp1,R1
@@ -4436,13 +4604,11 @@ bas_expr7:	PROC
 	BNC @@35
 	CMPI #$5B,R0
 	BNC @@5
-@@35:	CMPI #$2E,R0	; Period?
+@@35:	CMPI #TOKEN_NUMBER,R0	; Period?
 	BEQ @@11
-	CMPI #$30,R0	; 0-9?
-	BNC @@37
-	CMPI #$3A,R0
-	BNC @@11
-@@37:	CMPI #$22,R0	; Quote?
+	CMPI #TOKEN_INTEGER,R0	
+	BEQ @@37
+	CMPI #$22,R0	; Quote?
 	BEQ @@36
 	CMPI #$28,R0	; Parenthesis?
 	BEQ @@12
@@ -4490,13 +4656,28 @@ bas_expr7:	PROC
 
 @@17:	DECR R4
 	CALL get_var_addr.0
-	MVI@ R5,R2
-	MVI@ R5,R3
+	MVI@ R1,R2
+	INCR R1
+	MVI@ R1,R3
 	CLRC
 	PULR PC
 
-@@11:
-	CALL fpparse
+@@11:	MVI@ R4,R3
+	MVI@ R4,R1
+	SWAP R1
+	ADDR R1,R3
+	MVI@ R4,R2
+	MVI@ R4,R1
+	SWAP R1
+	ADDR R1,R2
+	CLRC
+	PULR PC
+
+@@37:	MVI@ R4,R0
+	MVI@ R4,R1
+	SWAP R1
+	ADDR R1,R0
+	CALL fpfromuint
 	MOVR R0,R2
 	MOVR R1,R3
 	CLRC
@@ -4513,34 +4694,16 @@ bas_expr7:	PROC
 	; Parse an integer.
 	;
 parse_integer:	PROC
-	macro_get_next	
-	SUBI #$30,R0
-	BNC @@4
-	CMPI #$0A,R0
-	BC @@4
-	MOVR R0,R2
+	macro_get_next
+	CMPI #TOKEN_INTEGER,R0
+	BNE @@1
 	MVI@ R4,R0
-	SUBI #$30,R0
-	BNC @@3
-	CMPI #$0A,R0
-	BC @@3
-@@1:
-	MOVR R2,R1
-	SLL R2,2	; x4
-	ADDR R1,R2	; x5
-	ADDR R2,R2	; x10
-	ADDR R0,R2
-@@2:	MVI@ R4,R0
-	SUBI #$30,R0
-	BNC @@3
-	CMPI #$0A,R0
-	BNC @@1
-@@3:
-	DECR R4
-	MOVR R2,R0
+	MVI@ R4,R1
+	SWAP R1
+	ADDR R1,R0	
 	MOVR R5,PC
 
-@@4:	SETC
+@@1:	SETC
 	MOVR R5,PC
 	ENDP
 
