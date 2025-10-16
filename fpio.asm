@@ -335,25 +335,22 @@ fpparse:	PROC
 	MVO R3,fptemp2
 	CMPI #5,R1
 	BNC @@21
-	; Overflow flag guaranteed to be zero here.
 	MVO R2,fptemp1
-	CLRC
-	RLC R3,2	; x4
+	SLLC R3,2	; x4
 	RLC R2,2
 	ADD fptemp2,R3
 	ADCR R2
 	ADD fptemp1,R2	; x5
-;	CLRC	; Carry flag will be zero always.
-	RLC R3,1
+	SLLC R3,1
 	RLC R2,1	; x10
 	ADDR R0,R3	; + digit
 	ADCR R2
 	B @@1
 
-@@21:	; Carry flag and Overflow flag guaranteed to be zero here.
-	RLC R3,2
+@@21:	
+	SLL R3,2
 	ADD fptemp2,R3
-	RLC R3,1
+	SLL R3,1
 	ADDR R0,R3
 	B @@1
 

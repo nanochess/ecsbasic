@@ -397,11 +397,11 @@ fpdiv:	PROC
 	;
 fpcomp:	PROC
 	PSHR R5
+	MVII #$00FF,R5
 	MOVR R1,R4
-	ANDI #$00FF,R4
+	ANDR R5,R4
 	XORI #$0080,R4	; So negative sign is lesser.
-	MOVR R3,R5
-	ANDI #$00FF,R5
+	ANDR R3,R5
 	XORI #$0080,R5	; So negative sign is lesser.
 	CMPR R5,R4
 	BNE @@1
@@ -423,30 +423,24 @@ fpcomp:	PROC
 	; These never are too small or too big, so the comparisons are removed.
 	;
 fpnorm:	PROC
-	CMPI #$80,R2
-	; Now the overflow and carry flags are zero.
 @@1:
-	DECR R2
-	DECR R2
-	RLC R1,2
+	SUBI #2,R2
+	SLLC R1,2
 	RLC R0,2
 	BC @@2
 	BOV @@4
-	DECR R2
-	DECR R2
-	RLC R1,2
+	SUBI #2,R2
+	SLLC R1,2
 	RLC R0,2
 	BC @@2
 	BOV @@4
-	DECR R2
-	DECR R2
-	RLC R1,2
+	SUBI #2,R2
+	SLLC R1,2
 	RLC R0,2
 	BC @@2
 	BOV @@4
-	DECR R2
-	DECR R2
-	RLC R1,2
+	SUBI #2,R2
+	SLLC R1,2
 	RLC R0,2
 	BC @@2
 	BOV @@4
@@ -690,6 +684,9 @@ fp2int:	PROC
 
 @@4:	SLR R0,1
 	DECR R2
+	BEQ @@2
+	SLR R0,1
+	DECR R2
 	BNE @@4
 @@2:	ANDI #$0080,R1
 	BEQ @@3
@@ -722,6 +719,9 @@ fp2uint:	PROC
 	B @@2
 
 @@4:	SLR R0,1
+	DECR R2
+	BEQ @@2
+	SLR R0,1
 	DECR R2
 	BNE @@4
 @@2:	MOVR R5,PC

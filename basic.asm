@@ -729,9 +729,8 @@ line_search:	PROC
 	CMP program_end,R4	; Empty program?
 	BEQ @@1			; Yes, exit (for insertion).
 @@0:	MVI@ R4,R1
-	CMPR R1,R0	; Compare the line number.
-	BEQ @@3		; Found the line number? Yes, jump.
-	BNC @@3		; Found a higher line number? Yes, jump (for insertion).
+	CMPR R0,R1	; Compare the line number.
+	BC @@3		; Found the line number? Yes, jump.
 	ADD@ R4,R4	; Jump over the tokens.
 	CMP program_end,R4
 	BNE @@0
@@ -955,7 +954,7 @@ bas_tokenize:	PROC
 	INCR R3
 	B @@6
 
-@@14:	CMPI #$10,R0		; ASCII character $20-$2f?
+@@14:	CMPI #$1A,R0		; ASCII character $20-$39?
 	BNC @@20
 	DECR R4
 	MVII #keywords,R2
@@ -1053,8 +1052,9 @@ bas_execute_line:	PROC
 @@2:	MVI@ R4,R0
 	TSTR R0
 	BEQ @@0
-	DECR R4
-	CALL bas_execute
+	MVI bas_strbase,R1
+	MVO R1,bas_strptr	; Reset strings stack.
+	CALL bas_execute.5
 	macro_get_next
 	TSTR R0
 	BEQ @@0
@@ -1077,10 +1077,11 @@ bas_execute_line:	PROC
 	; Execute a BASIC statement
 	;
 bas_execute:	PROC
-	MVI bas_strbase,R0
-	MVO R0,bas_strptr	; Reset strings stack.
+	MVI bas_strbase,R1
+	MVO R1,bas_strptr	; Reset strings stack.
 @@0:
 	MVI@ R4,R0
+@@5:
 	CMPI #$20,R0
 	BEQ @@0
 	CMPI #TOKEN_START,R0	; Token found?
@@ -1297,8 +1298,6 @@ bas_cls:	PROC
 	; Run the program
 	;
 bas_run:	PROC
-	MVII #STACK,R6
-
 	CALL parse_integer
 	BC @@2
 	CALL line_search
@@ -1317,7 +1316,7 @@ bas_run:	PROC
 	CALL restart_pointers
 	PULR R4	
 
-@@1:
+	MVII #STACK,R6
 	CALL bas_execute_line
 	B basic_restart
 	ENDP
@@ -1581,23 +1580,23 @@ bas_input:	PROC
 	; Check for Esc key pressed to stop execution
 	;
 bas_check_esc:	PROC
-	PSHR R5
-	; Check at 30 hz.
+	; Check at 15 hz.
 	MVI _frame,R0
-	ANDI #$00FE,R0
+	ANDI #$00FC,R0
 	CMP _check_esc,R0
-	BEQ @@4
+	BEQ @@1
 	MVO R0,_check_esc
 
 	PSHR R4
+	PSHR R5
 	CALL SCAN_KBD
+	PULR R5
 	PULR R4
 	CMPI #KEY.ESC,R0
-	BNE @@4
+	BNE @@1
 	MVII #ERR_STOP,R0
 	CALL bas_error
-@@4:
-	PULR PC
+@@1:	MOVR R5,PC
 	ENDP
 
 	;
@@ -1614,7 +1613,8 @@ bas_goto:	PROC
 	BNE @@3
 	CALL bas_check_esc
 	MVII #STACK,R6
-	B bas_run.1
+	CALL bas_execute_line
+	B basic_restart
 
 @@3:	MVII #ERR_LINE,R0
 	CALL bas_error
@@ -1956,8 +1956,8 @@ bas_gosub:	PROC
 @@3:
 	CALL bas_check_esc
 	MVII #STACK,R6
-	B bas_run.1
-	PULR PC
+	CALL bas_execute_line
+	B basic_restart
 
 @@5:	MVII #ERR_GOSUB,R0
 	CALL bas_error
@@ -2120,9 +2120,10 @@ bas_read:	PROC
 	MOVR R5,R0
 	CALL string_create
 	PULR R4
-	PULR R5
-	MVI bas_strptr,R3
-	MVO@ R3,R5
+	PULR R1
+	PSHR R4
+	CALL string_assign
+	PULR R4
 	B @@11
 
 	; End of line.
@@ -4512,7 +4513,6 @@ bas_expr7:	PROC
 	; Parse an integer.
 	;
 parse_integer:	PROC
-	PSHR R5
 	macro_get_next	
 	SUBI #$30,R0
 	BNC @@4
@@ -4538,10 +4538,10 @@ parse_integer:	PROC
 @@3:
 	DECR R4
 	MOVR R2,R0
-	PULR PC
+	MOVR R5,PC
 
 @@4:	SETC
-	PULR PC
+	MOVR R5,PC
 	ENDP
 
 	;
