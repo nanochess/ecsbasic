@@ -2160,8 +2160,7 @@ bas_read:	PROC
 	BEQ @@3
 
 	; Number identified.
-@@3:	DECR R4
-	CALL fpparse
+@@3:	CALL fpparse
 	PULR R5
 	MVO@ R0,R5	; Save into variable
 	MVO@ R1,R5
@@ -4295,7 +4294,6 @@ bas_expr7:	PROC
 	MVO@ R0,R5
 	MOVR R3,R4
 	macro_get_next
-	DECR R4
 	CALL fpparse
 	MOVR R0,R2
 	MOVR R1,R3
@@ -4322,6 +4320,8 @@ bas_expr7:	PROC
 @@STR:	CALL bas_expr_paren
 	BC bas_type_err
 	PSHR R4
+	MVI bas_func,R2
+	PSHR R2
 	MVII #@@STR2,R2
 	MVO R2,bas_func
 	CLRR R2
@@ -4330,6 +4330,8 @@ bas_expr7:	PROC
 	MVII #basic_buffer,R0
 	MVI temp1,R1
 	CALL string_create
+	PULR R2
+	MVO R2,bas_func
 	PULR R4
 	SETC
 	PULR PC
