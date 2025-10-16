@@ -114,7 +114,7 @@ TOKEN_NUMBER:	EQU $0d
 TOKEN_INTEGER:	EQU $08
 
 COLOR_TEXT:	EQU $07
-COLOR_TOKEN:	EQU $07
+COLOR_TOKEN:	EQU $06
 COLOR_NUMBER:	EQU $03
 
 	;
@@ -1266,14 +1266,45 @@ bas_generic_list:	PROC
 	MVI@ R4,R0
 	TSTR R0
 	BEQ @@3
+	CMPI #$22,R0
+	BNE @@19
+	MVII #COLOR_TEXT,R1
+	MVO R1,bas_curcolor
+@@20:
+	PSHR R4
+	CALL indirect_output
+	PULR R4
+	MVI@ R4,R0
+	TSTR R0
+	BEQ @@3
+	CMPI #$22,R0
+	BNE @@20
+	PSHR R4
+	CALL indirect_output
+	PULR R4
+	B @@4
+@@19:
 	CMPI #TOKEN_NUMBER,R0
 	BEQ @@5
 	CMPI #TOKEN_INTEGER,R0
 	BEQ @@14
 	CMPI #TOKEN_START,R0
 	BC @@16
+	CMPI #$2B,R0
+	BEQ @@17
+	CMPI #$2D,R0
+	BEQ @@17
+	CMPI #$2A,R0
+	BEQ @@17
+	CMPI #$2F,R0
+	BEQ @@17
+	CMPI #$5E,R0
+	BEQ @@17
 	MVII #COLOR_TEXT,R1
-	MVO R1,bas_curcolor
+	B @@18
+@@17:
+	MVII #COLOR_TOKEN,R1
+@@18:	MVO R1,bas_curcolor
 	PSHR R4
 	CALL indirect_output
 	PULR R4
