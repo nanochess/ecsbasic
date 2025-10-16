@@ -8,7 +8,7 @@ This a BASIC language for the Intellivision Entertainment Computer System. I int
 
 It is written in CP1610 assembler language, and it has been tested both in emulation and with real hardware.
 
-For example, this program runs in 18 seconds (modified from a benchmark by carlsson):
+For example, this program runs in 17 seconds (modified from a benchmark by carlsson):
 
 ![image](shot0006.gif)
 

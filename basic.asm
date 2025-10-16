@@ -1578,16 +1578,17 @@ bas_input:	PROC
 	ENDP
 
 	;
-	; GOTO
+	; Check for Esc key pressed to stop execution
 	;
-bas_goto:	PROC
+bas_check_esc:	PROC
 	PSHR R5
-	CALL parse_integer
-	BC @@0
-@@1:	; Entry point for ON GOTO
-	CALL line_search
-	CMPR R1,R0
-	BNE @@3
+	; Check at 30 hz.
+	MVI _frame,R0
+	ANDI #$00FE,R0
+	CMP _check_esc,R0
+	BEQ @@4
+	MVO R0,_check_esc
+
 	PSHR R4
 	CALL SCAN_KBD
 	PULR R4
@@ -1596,13 +1597,29 @@ bas_goto:	PROC
 	MVII #ERR_STOP,R0
 	CALL bas_error
 @@4:
+	PULR PC
+	ENDP
+
+	;
+	; GOTO
+	;
+bas_goto:	PROC
+	PSHR R5
+@@0:
+	CALL parse_integer
+	BC @@5
+@@1:	; Entry point for ON GOTO
+	CALL line_search
+	CMPR R1,R0
+	BNE @@3
+	CALL bas_check_esc
 	MVII #STACK,R6
 	B bas_run.1
 
 @@3:	MVII #ERR_LINE,R0
 	CALL bas_error
 
-@@0:	MVII #ERR_SYNTAX,R0
+@@5:	MVII #ERR_SYNTAX,R0
 	CALL bas_error
 	ENDP
 
@@ -1623,9 +1640,8 @@ bas_if:	PROC
 	BNC @@3
 	CMPI #$3A,R0
 	BC @@3
-	PULR R5
 	DECR R4
-	B bas_goto
+	B bas_goto.0
 @@3:
 	PULR R5
 	DECR R4
@@ -1822,6 +1838,7 @@ bas_for:	PROC
 	;
 bas_next:	PROC
 	PSHR R5
+	CALL bas_check_esc
 	MVI bas_forptr,R5
 	CMPI #start_for,r5
 	BNE @@1
@@ -1937,14 +1954,7 @@ bas_gosub:	PROC
 	MVII #ERR_LINE,R0
 	CALL bas_error
 @@3:
-	PSHR R4
-	CALL SCAN_KBD
-	PULR R4
-	CMPI #KEY.ESC,R0
-	BNE @@4
-	MVII #ERR_STOP,R0
-	CALL bas_error
-@@4:
+	CALL bas_check_esc
 	MVII #STACK,R6
 	B bas_run.1
 	PULR PC
@@ -3239,7 +3249,10 @@ bas_type_err:	PROC
 	ENDP
 
 	;
-	; Process an expression.
+	; Expression evaluation
+	; The type is passed in the Carry flag.
+	; Carry flag clear = Number.
+	; Carry flag set = String.
 	;
 bas_expr:	PROC
 	PSHR R5
@@ -4416,20 +4429,20 @@ bas_expr7:	PROC
 @@indirect:
 	MOVR R0,PC
 
-@@6:	CMPI #$22,R0	; Quote?
-	BEQ @@36
-	CMPI #$28,R0	; Parenthesis?
-	BEQ @@12
-	CMPI #$41,R0	; A-Z?
+@@6:	CMPI #$41,R0	; A-Z?
 	BNC @@35
 	CMPI #$5B,R0
 	BNC @@5
 @@35:	CMPI #$2E,R0	; Period?
 	BEQ @@11
 	CMPI #$30,R0	; 0-9?
-	BNC @@2
+	BNC @@37
 	CMPI #$3A,R0
 	BNC @@11
+@@37:	CMPI #$22,R0	; Quote?
+	BEQ @@36
+	CMPI #$28,R0	; Parenthesis?
+	BEQ @@12
 	B @@2
 
 @@36:	MOVR R4,R5	; Start of string.
@@ -4480,7 +4493,6 @@ bas_expr7:	PROC
 	PULR PC
 
 @@11:
-	DECR R4
 	CALL fpparse
 	MOVR R0,R2
 	MOVR R1,R3
@@ -5315,7 +5327,7 @@ program_end:	RMB 1	; Pointer to program's end.
 lfsr:		RMB 1	; Random number
 _mode_color:	RMB 1	; Colors for Color Stack mode.
 _gram_bitmap:	RMB 1	; Pointer to bitmap for GRAM.
-_timeout:	RMB 1	;
+_timeout:	RMB 1	; For cassette functions.
 	; For the PLOT/DRAW statements.
 plot_x:	RMB 1
 plot_y:	RMB 1
@@ -5344,6 +5356,7 @@ ECS_KEY_LAST:	RMB 1	; ECS last key pressed.
 temp1:		RMB 1	; Temporary value.
 _filename:	RMB 4	; File name.
 _printer_col:	RMB 1	; Printer column.
+_check_esc:	RMB 1	; For checking Esc key.
 
 	; Enable JLP RAM on real hardware. Nice for LTO-Flash.
 ;	CFGVAR "jlp" = 1	

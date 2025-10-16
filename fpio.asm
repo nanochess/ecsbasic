@@ -299,7 +299,6 @@ fpprint:	PROC
 	;
 fpparse:	PROC
 	PSHR R5
-	MVI@ R4,R0	; Read input.
 	CMPI #$2D,R0	; Negative number?
 	BNE @@17	; No, jump.
 	MVII #$0080,R0	; Yes, signal it.
@@ -352,7 +351,6 @@ fpparse:	PROC
 	B @@1
 
 @@21:	; Carry flag and Overflow flag guaranteed to be zero here.
-	MVO R3,fptemp2
 	RLC R3,2
 	ADD fptemp2,R3
 	RLC R3,1

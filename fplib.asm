@@ -18,6 +18,7 @@
 	; Revision date: Oct/13/2025. Optimized addition and multiplication.
 	; Revision date: Oct/14/2025. Optimized division, normalization, fp2int, and fpsgn.
 	; Revision date: Oct/15/2025. Optimized integer conversion to avoid shifts.
+	; Revision date: Oct/16/2025. Added double bit shift for faster integer conversion.
 	;
 
 	; Temporary
@@ -417,6 +418,53 @@ fpcomp:	PROC
 	ENDP
 
 	;
+	; Normalization for integers.
+	; These can come with multiple zero bits, so try moving 2 bits at a time.
+	; These never are too small or too big, so the comparisons are removed.
+	;
+fpnorm:	PROC
+	CMPI #$80,R2
+	; Now the overflow and carry flags are zero.
+@@1:
+	DECR R2
+	DECR R2
+	RLC R1,2
+	RLC R0,2
+	BC @@2
+	BOV @@4
+	DECR R2
+	DECR R2
+	RLC R1,2
+	RLC R0,2
+	BC @@2
+	BOV @@4
+	DECR R2
+	DECR R2
+	RLC R1,2
+	RLC R0,2
+	BC @@2
+	BOV @@4
+	DECR R2
+	DECR R2
+	RLC R1,2
+	RLC R0,2
+	BC @@2
+	BOV @@4
+	B @@1
+
+	; One extra bit.
+@@2:	BOV @@3
+	CLRC
+@@3:	RRC R0,1
+	RRC R1,1
+	INCR R2
+@@4:
+	ADDR R3,R1	; Add sign back.
+	ADDR R2,R1	; Add exponent back.
+	MOVR R5,PC
+	ENDP
+
+	;
 	; Convert integer to floating-point
 	;
 	; Input: R0 = Signed value.
@@ -429,26 +477,25 @@ fpfromint:	PROC
 	MOVR R5,PC
 
 @@1:	BPL @@3
-	MVII #$80,R2
+	MVII #$80,R3	; Sign is negative.
 	NEGR R0
 	B @@4
 
-@@3:	CLRR R2
-@@4:	PSHR R5
-	PSHR R2
+@@3:	CLRR R3		; Sign is positive.
+@@4:	
 	;
 	; Preshift 8 bits if the number is small.
 	;
 	CMPI #$0100,R0
 	BC @@5
 	SWAP R0
-	MVII #FPEXP_BIAS+$08,R5
+	MVII #FPEXP_BIAS+$08,R2
 	; Reuse the normalize code.
-	B fpadd.11	; Normalize
+	B fpnorm	; Normalize
 @@5:
-	MVII #FPEXP_BIAS+$10,R5
+	MVII #FPEXP_BIAS+$10,R2
 	; Reuse the normalize code.
-	B fpadd.11	; Normalize
+	B fpnorm	; Normalize
 	ENDP
 
 	;
@@ -457,20 +504,27 @@ fpfromint:	PROC
 	; Input: R0 = unsigned value.
 	; Output: R0,R1 = Floating-point value.
 	;
-    IF 0
 fpfromuint:	PROC
 	CLRR R1
 	TSTR R0
 	BNE @@1
 	MOVR R5,PC
 
-@@1:	PSHR R5
-	CLRR R2
-	PSHR R2
-	MVII #FPEXP_BIAS+$10,R5
+@@1:	CLRR R3		; Sign is positive.
+	;
+	; Preshift 8 bits if the number is small.
+	;
+	CMPI #$0100,R0
+	BC @@5
+	SWAP R0
+	MVII #FPEXP_BIAS+$08,R2
 	; Reuse the normalize code.
-	B fpadd.11	; Normalize
-    ENDI
+	B fpnorm	; Normalize
+@@5:
+	MVII #FPEXP_BIAS+$10,R2
+	; Reuse the normalize code.
+	B fpnorm	; Normalize
+	ENDP
 
 	;
 	; Convert long unsigned integer to floating-point
@@ -479,32 +533,29 @@ fpfromuint:	PROC
 	; Output: R0,R1 = Floating-point value.
 	;
 fpfromuint24:	PROC
+	CLRR R3		; Sign is positive.
 	TSTR R0
-	BNE @@1
+	BNE @@2
 	TSTR R1
 	BNE @@1
 	MOVR R5,PC
 
-@@1:	PSHR R5
-	CLRR R2
-	PSHR R2
+@@1:	
 	;
 	; Preshift 8 bits if the number is small.
 	;
-	TSTR R0		; High-word is zero?
-	BNE @@2		; No, jump.
 	MOVR R1,R0
 	CLRR R1
 	CMPI #$0100,R0
 	BC @@3
 	SWAP R0
-	MVII #FPEXP_BIAS+$08,R5
+	MVII #FPEXP_BIAS+$08,R2
 	; Reuse the normalize code.
-	B fpadd.11	; Normalize
+	B fpnorm	; Normalize
 @@3:
-	MVII #FPEXP_BIAS+$10,R5
+	MVII #FPEXP_BIAS+$10,R2
 	; Reuse the normalize code.
-	B fpadd.11	; Normalize
+	B fpnorm	; Normalize
 @@2:
 	SWAP R0
 	ANDI #$FF00,R0
@@ -513,9 +564,9 @@ fpfromuint24:	PROC
 	ANDI #$00FF,R2
 	ADDR R2,R0
 	ANDI #$FF00,R1
-	MVII #FPEXP_BIAS+$18,R5
+	MVII #FPEXP_BIAS+$18,R2
 	; Reuse the normalize code.
-	B fpadd.11	; Normalize
+	B fpnorm	; Normalize
 	ENDP
 
 	;
