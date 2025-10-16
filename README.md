@@ -16,7 +16,7 @@ The same program for the Mattel ECS BASIC takes 210 seconds:
 
 ![image](shot0005.gif)
 
-The resulting value of this benchmark is meaningless, because the calculations exceed completely the floating-point precision.
+The PRINT of the benchmark exists only to stop your chronometer, because all these multiplications exceed the limits of the floating-point format.
 
 There are 26 variables (A-Z), 26 string variables (A$-Z$), and 26 unidimensional arrays (A-Z) requiring DIM first to declare them.
 
