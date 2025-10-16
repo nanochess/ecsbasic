@@ -8,7 +8,7 @@ This a BASIC language for the Intellivision Entertainment Computer System. I int
 
 It is written in CP1610 assembler language, and it has been tested both in emulation and with real hardware.
 
-For example, this program runs in 17 seconds (modified from a benchmark by carlsson):
+For example, this program runs in 15 seconds (modified from a benchmark by carlsson):
 
 ![image](shot0006.gif)
 
@@ -195,8 +195,6 @@ If you are using any other Flash cartridge, be sure to enable 16-bit RAM memory 
 The LOAD, SAVE, and VERIFY statements are working in emulation and real hardware. Filenames are four characters (just to keep an small compatibility with the ECS tape format, and because the jzintv emulator can separate different files in the main directory)
 
 For real hardware, instead of cassette, you can use a PC computer and connect the "To tape" connector to the Mic input, and the "From tape" connector to the Line Out. I recommend using Audacity to handle the recording and playing. You need to amplify the recorded signal, Audacity chooses automatically the maximum level possible. It is suggested to save your recordings as WAV files.
-
-In the _utils_ directory, you can see the UFO_20251010.wav file recorded and amplified, ready for replaying.
 
 ## Printer support
 
