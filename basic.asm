@@ -46,6 +46,10 @@
 	; Revision date: Oct/11/2025. Added DRAW and CIRCLE.
 	; Revision date: Oct/13/2025. Optimized expression parsing.
 	; Revision date: Oct/16/2025. Numbers now are tokenized to avoid parsing in execution time.
+	; Revision date: Oct/17/2025. Line starting with a colon would crash the interpreter.
+	;                             Added literal copy after REM. Solved bug where any
+	;                             space after a quoted string was removed. Typing Esc alone and
+	;                             pressing Enter crashed the interpreter.
 	;
 
 	;
@@ -90,6 +94,7 @@ TOKEN_ELSE:	EQU TOKEN_START+$0b
 TOKEN_TO:	EQU TOKEN_START+$0d
 TOKEN_STEP:	EQU TOKEN_START+$0e
 TOKEN_GOSUB:	EQU TOKEN_START+$10
+TOKEN_REM:	EQU TOKEN_START+$12
 
 TOKEN_DATA:	EQU TOKEN_START+$15
 
@@ -433,7 +438,7 @@ main_loop:
 	; Table of statements' addresses.
 	;
 keywords_exec:
-	DECLE $0000		; Colon
+	DECLE bas_syntax_error	; Colon
 	DECLE bas_list
 	DECLE bas_new
 	DECLE bas_cls
@@ -960,7 +965,7 @@ bas_tokenize:	PROC
 	BC @@21
 	MVO@ R0,R3
 	INCR R3
-	B @@6
+	B @@16
 
 @@14:	CMPI #$0E,R0
 	BEQ @@22
@@ -1038,8 +1043,24 @@ bas_tokenize:	PROC
 	BEQ @@21
 	MVO@ R5,R3	; Write token.
 	INCR R3
+	CMPI #TOKEN_REM,R5
 	PULR R5		; Ignore restart position.
-	B @@16
+	BNE @@16
+	; Literal copy after REM
+@@27:
+	CMP bas_ttypos,R4
+	BEQ @@5
+	CALL bas_read_card
+	ADDI #$20,R0
+	CMPI #$80,R0
+	BNC @@26
+	MVII #$7F,R0	; Avoid invalid characters.
+@@26:
+	CMPI #basic_buffer_end+1,R3
+	BEQ @@21
+	MVO@ R0,R3
+	INCR R3
+	B @@27
 
 @@10:	MVI@ R2,R0
 	INCR R2
