@@ -45,6 +45,7 @@
 	;                             Added HEX$.
 	; Revision date: Oct/11/2025. Added DRAW and CIRCLE.
 	; Revision date: Oct/13/2025. Optimized expression parsing.
+	; Revision date: Oct/16/2025. Numbers now are tokenized to avoid parsing in execution time.
 	;
 
 	;
@@ -1058,7 +1059,10 @@ bas_tokenize:	PROC
 	CMPI #$7B,R0
 	BC @@18
 	SUBI #$20,R0
-@@18:
+@@18:	CMPI #$80,R0
+	BNC @@25
+	MVII #$7F,R0	; Avoid invalid characters.
+@@25:
 	CMPI #basic_buffer_end+1,R3
 	BEQ @@21
 	MVO@ R0,R3
