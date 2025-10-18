@@ -55,6 +55,7 @@
 	;                             go into printing all the memory.
 	; Revision date: Oct/18/2025. Solved bug where only the first array could be accessed.
 	;                             DIM now can define multiple arrays in the same statement.
+	;                             Solved bug in get_next_point when ELSE followed.
 	;
 
 	;
@@ -1867,7 +1868,19 @@ get_next_point:	PROC
 	BEQ @@2
 	CMPI #TOKEN_COLON,R0
 	BEQ @@3
-	B @@4
+	CMPI #TOKEN_ELSE,R0
+	BNE @@4
+	; If the ELSE token is found, ignore remaining of the line.
+@@5:	MVI@ R4,R0
+	CMPI #TOKEN_INTEGER,R0
+	BNE @@6
+	ADDI #2,R4
+@@6:	CMPI #TOKEN_NUMBER,R0
+	BNE @@7
+	ADDI #4,R4
+@@7:	TSTR R0
+	BNE @@5
+	B @@1
 
 @@1:	MVI@ R4,R1
 	TSTR R1		; No more lines?
@@ -2716,12 +2729,10 @@ bas_sprite:	PROC
 	;
 bas_wait:	PROC
 	PSHR R5
+	MVI _frame,R0
 @@1:
-	MVI _int,R0
-	TSTR R0
+	CMP _frame,R0
 	BEQ @@1
-	CLRR R0
-	MVO R0,_int
 	PULR PC
 	ENDP
 
