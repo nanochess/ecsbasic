@@ -6,7 +6,7 @@
 
 This a BASIC language for the Intellivision Entertainment Computer System. I intend to make it as a (better) replacement for the incredibly slow and limited Intellivision ECS BASIC.
 
-I wrote an article in two parts about its development, you can read [part1 here](https://nanochess.org/ecs_basic.html) and [part2 here](https://nanochess.org/ecs_basic_2.html).
+I wrote an article in two parts about its development, you can read [part1 here](https://nanochess.org/ecs_basic.html), [part2 here](https://nanochess.org/ecs_basic_2.html), and an [Atariage thread](https://forums.atariage.com/topic/384664-typing-basic-on-my-ecs/)
 
 It is written in CP1610 assembler language, and it has been tested both in emulation and with real hardware.
 
@@ -211,3 +211,12 @@ The LPRINT, and LLIST statements are working in real hardware using a Mattel Aqu
 If your printer doesn't come with the cable, here is a schematic of how you can build one: https://forums.atariage.com/topic/323929-aquarius-printer-technical-info-and-reverse-engineering/
 
 ![image](README1.jpg)
+
+## More programs
+
+I've started a [thread in Atariage](https://forums.atariage.com/topic/385238-i-set-up-a-game-factory-with-my-ecs/) to publish games made with my interpreter.
+
+* Hangman.
+* Lunatic Math.
+* Dogfight.
+
