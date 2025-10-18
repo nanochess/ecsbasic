@@ -49,7 +49,10 @@
 	; Revision date: Oct/17/2025. Line starting with a colon would crash the interpreter.
 	;                             Added literal copy after REM. Solved bug where any
 	;                             space after a quoted string was removed. Typing Esc alone and
-	;                             pressing Enter crashed the interpreter.
+	;                             pressing Enter crashed the interpreter. Cleaned tokenizer,
+	;                             and solved bug where strings had no limit. Solved bug in
+	;                             PRINT where semicolon didn't worked, and missing quote would
+	;                             go into printing all the memory.
 	;
 
 	;
@@ -898,6 +901,10 @@ bas_read_card:	PROC
 	ANDI #$0FF8,R0
 	SLR R0,2
 	SLR R0,1
+	CMPI #$60,R0
+	BNC @@1
+	MVII #$5F,R0
+@@1:	ADDI #$20,R0
 	MOVR R5,PC
 	ENDP
 
@@ -919,14 +926,14 @@ bas_tokenize:	PROC
 @@1:	CMP bas_ttypos,R4	; Reached the cursor.
 	BEQ @@0
 	CALL bas_read_card
-	TSTR R0			; Space character?
+	CMPI #$20,R0		; Space character?
 	BEQ @@1
 @@2:
-	CMPI #$10,R0
+	CMPI #$30,R0
 	BNC @@3
-	CMPI #$1A,R0
+	CMPI #$3A,R0
 	BC @@3
-	SUBI #$10,R0
+	SUBI #$30,R0
 	MOVR R2,R1
 	SLL R2,2
 	ADDR R1,R2		; x5
@@ -941,37 +948,37 @@ bas_tokenize:	PROC
 @@3:	MVO@ R2,R3		; Take note of the line number
 	INCR R3
 	INCR R3			; Avoid the tokenized length.
-	TSTR R0			; Space character?
+	CMPI #$20,R0		; Space character?
 	BNE @@4
 @@6:
 	CMP bas_ttypos,R4
 	BEQ @@5
 	CALL bas_read_card
-	TSTR R0
-	BEQ @@6
+	CMPI #$20,R0		; Is it space?
+	BEQ @@6			; Yes, ignore.
 	; Start tokenizing
-@@4:	CMPI #$02,R0		; Quotes?
+@@4:	CMPI #$22,R0		; Quotes?
 	BNE @@14
-@@15:	ADDI #$20,R0
+@@15:	CMPI #basic_buffer_end,R3
+	BC @@21
 	MVO@ R0,R3		; Pass along string.
 	INCR R3
 	CMP bas_ttypos,R4
 	BEQ @@5
 	CALL bas_read_card
-	CMPI #$02,R0
+	CMPI #$22,R0
 	BNE @@15
-	ADDI #$20,R0
 	CMPI #basic_buffer_end,R3
 	BC @@21
 	MVO@ R0,R3
 	INCR R3
 	B @@16
 
-@@14:	CMPI #$0E,R0
+@@14:	CMPI #$2E,R0
 	BEQ @@22
-	CMPI #$10,R0		; ASCII character $20-$39?
+	CMPI #$30,R0		; ASCII character $20-$39?
 	BNC @@20
-	CMPI #$1A,R0
+	CMPI #$3A,R0
 	BC @@23
 @@22:	DECR R4
 	PSHR R3
@@ -1039,7 +1046,7 @@ bas_tokenize:	PROC
 	MVI@ R2,R0
 	TSTR R0		; End of token?
 	BNE @@11
-	CMPI #basic_buffer_end+1,R3
+	CMPI #basic_buffer_end,R3
 	BEQ @@21
 	MVO@ R5,R3	; Write token.
 	INCR R3
@@ -1051,12 +1058,7 @@ bas_tokenize:	PROC
 	CMP bas_ttypos,R4
 	BEQ @@5
 	CALL bas_read_card
-	ADDI #$20,R0
-	CMPI #$80,R0
-	BNC @@26
-	MVII #$7F,R0	; Avoid invalid characters.
-@@26:
-	CMPI #basic_buffer_end+1,R3
+	CMPI #basic_buffer_end,R3
 	BEQ @@21
 	MVO@ R0,R3
 	INCR R3
@@ -1074,17 +1076,13 @@ bas_tokenize:	PROC
 	; No token found	
 @@7:	CALL bas_read_card
 @@20:
-	ADDI #$20,R0
 	CMPI #$61,R0
 	BNC @@18
 	CMPI #$7B,R0
 	BC @@18
 	SUBI #$20,R0
-@@18:	CMPI #$80,R0
-	BNC @@25
-	MVII #$7F,R0	; Avoid invalid characters.
-@@25:
-	CMPI #basic_buffer_end+1,R3
+@@18:
+	CMPI #basic_buffer_end,R3
 	BEQ @@21
 	MVO@ R0,R3
 	INCR R3
@@ -1534,26 +1532,41 @@ bas_lprint:	PROC
 bas_generic_print:	PROC
 	PSHR R5
 	macro_get_next
-	CMPI #TOKEN_AT,R0
+	CMPI #TOKEN_AT,R0	; PRINT AT pos
 	BNE @@5
 	CALL bas_expr_int
 	CMPI #240,R0
 	BC @@10
 	ADDI #$0200,R0
 	MVO R0,bas_ttypos
+	macro_get_next
+	CMPI #TOKEN_COLON,R0
+	BEQ @@15
+	CMPI #TOKEN_ELSE,R0
+	BEQ @@15
+	TSTR R0
+	BNE @@5
+@@15:
+	DECR R4
+	PULR PC
+	;
+	; Main parser
+	;
 @@3:
 	macro_get_next
-@@5:
 	TSTR R0
 	BEQ @@6
 	CMPI #TOKEN_COLON,R0
 	BEQ @@6
 	CMPI #TOKEN_ELSE,R0
 	BEQ @@6
+@@5:
 	CMPI #$22,R0	; Quotes?
 	BNE @@2
 @@1:
 	MVI@ R4,R0
+	TSTR R0
+	BEQ @@6
 	CMPI #$22,R0	; Quotes?
 	BEQ @@3
 	PSHR R4
@@ -1561,11 +1574,16 @@ bas_generic_print:	PROC
 	PULR R4
 	B @@1
 	
-@@2:	CMPI #$3B,R0
-	BNE @@4
+@@2:	CMPI #$3B,R0	; Semicolon?
+	BNE @@4		; No, jump.
 	macro_get_next
+	CMPI #TOKEN_ELSE,R0
+	BEQ @@16
+	CMPI #TOKEN_COLON,R0
+	BEQ @@16
 	TSTR R0
 	BNE @@5
+@@16:
 	DECR R4
 	PULR PC
 @@6:
@@ -1805,9 +1823,7 @@ bas_if:	PROC
 
 @@1:	CLRR R5
 @@6:
-	PSHR R5
 	macro_get_next
-	PULR R5
 	CMPI #TOKEN_INTEGER,R0
 	BNE @@7
 	ADDI #2,R4
