@@ -4,6 +4,8 @@
 
 ### (c) Copyright 2025 Oscar Toledo G.
 
+![image](README0.jpg){style="float:right;"}
+
 This a BASIC language for the Intellivision Entertainment Computer System. I intend to make it as a (better) replacement for the incredibly slow and limited Intellivision ECS BASIC.
 
 I wrote an article in two parts about its development, you can read [part1 here](https://nanochess.org/ecs_basic.html) and [part2 here](https://nanochess.org/ecs_basic_2.html).
