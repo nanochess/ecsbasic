@@ -53,6 +53,8 @@
 	;                             and solved bug where strings had no limit. Solved bug in
 	;                             PRINT where semicolon didn't worked, and missing quote would
 	;                             go into printing all the memory.
+	; Revision date: Oct/18/2025. Solved bug where only the first array could be accessed.
+	;                             DIM now can define multiple arrays in the same statement.
 	;
 
 	;
@@ -1894,10 +1896,10 @@ get_var_addr:	PROC
 	BNE @@2			; No, jump.
 	PSHR R5
 	PSHR R2
-	CALL bas_expr
+	CALL bas_expr	; Get index.
 	MOVR R2,R0
 	MOVR R3,R1
-	CALL fp2uint
+	CALL fp2uint	; Convert to integer.
 	PULR R2
 	PSHR R0
 	macro_get_next
@@ -1905,27 +1907,27 @@ get_var_addr:	PROC
 	BNE @@1
 	PSHR R4
 	MVI bas_arrays,R1
-@@3:	MVI@ R1,R4
+@@3:	MVI@ R1,R4	; Read name.
 	TSTR R4		; End of arrays?
-	BEQ @@5
+	BEQ @@5		; Yes, error.
 	CMP@ R1,R2	; Name comparison.
 	BEQ @@4		; Jump if found.
-	INCR R3
-	MVI@ R1,R0
-	INCR R1
+	INCR R1		; Jump over name.
+	MVI@ R1,R0	; Get length.
+	INCR R1		; Jump over length.
 	SLL R0,1	; Length x2.
-	ADDR R0,R1
-	B @@3
+	ADDR R0,R1	; Jump over contents.
+	B @@3		; Keep searching.
 
 @@4:	INCR R1		; Jump over name.
 	PULR R4		; Restore parsing position.
 	PULR R0		; Restore desired index.
-	CMP@ R1,R0
-	BC @@6
-	INCR R1
-	SLL R0,1
-	ADDR R0,R1
-	PULR PC
+	CMP@ R1,R0	; Is index bigger than length?
+	BC @@6		; Yes, error.
+	INCR R1		; Point to array contents.
+	SLL R0,1	; Adjust index.
+	ADDR R0,R1	; Point to desired element.
+	PULR PC		; Return.
 
 @@2:	DECR R4
 	SLL R2,1
@@ -2451,6 +2453,7 @@ bas_data:	PROC
 	;
 bas_dim:	PROC
 	PSHR R5
+@@0:
 	macro_get_next
 	CMPI #$41,R0	; Variable name?
 	BNC @@1
@@ -2474,38 +2477,43 @@ bas_dim:	PROC
 	;
 	PSHR R4
 	MVI bas_arrays,R3
-@@5:	MVI@ R3,R4
-	TSTR R4
-	BEQ @@4
-	CMP@ R3,R2
-	BEQ @@2
-	INCR R3
-	MVI@ R3,R0
-	INCR R3
+@@5:	MVI@ R3,R4	; Read array name.
+	TSTR R4		; End of list?
+	BEQ @@4		; Yes, jump.
+	CMP@ R3,R2	; Same name?
+	BEQ @@2		; Yes, error.
+	INCR R3		; Jump over name.
+	MVI@ R3,R0	; Get length.
+	INCR R3		; Jump over length.
 	SLL R0,1	; Length x2.
-	ADDR R0,R3
-	B @@5
+	ADDR R0,R3	; Jump over array contents.
+	B @@5		; Keep searching.
 
-@@4:	MOVR R3,R0
-	ADDI #3,R0
+@@4:	MOVR R3,R0	; Get current address.
+	ADDI #3,R0	; Add name, length, and end word.
+	ADDR R1,R0	; Add length two times.
 	ADDR R1,R0
-	ADDR R1,R0
-	CMP bas_strptr,R0
-	BC @@3
-	MVO@ R2,R3
+	CMP bas_strptr,R0	; Exceed memory available?
+	BC @@3		; Yes, error.
+	MVO@ R2,R3	; Take note of array name.
 	INCR R3
-	MVO@ R1,R3
+	MVO@ R1,R3	; Take note of length.
 	INCR R3
-	SLL R1,1	; Length x2.
 	CLRR R2
 @@6:	MVO@ R2,R3	; Clear array.
 	INCR R3
+	MVO@ R2,R3
+	INCR R3
 	DECR R1
 	BNE @@6
-	CLRR R1
+	CLRR R1		; End word.
 	MVO@ R1,R3
 	MVO R3,bas_last_array
 	PULR R4
+	macro_get_next
+	CMPI #$2C,R0	; Comma?
+	BEQ @@0		; Yes, jump to define another array.
+	DECR R4
 	PULR PC
 
 @@3:	MVII #ERR_MEMORY,R0
@@ -5266,25 +5274,43 @@ SCAN_KBD    PROC
            ;;  Try to find CTRL and SHIFT first.                           ;;
            ;;  Shift takes priority over control.                          ;;
            ;; ------------------------------------------------------------ ;;
-           MVII    #KBD_DECODE.no_mods, R3 ; neither shift nor ctrl
 
            ; maybe DIS here
            MVI     $F8,        R0
            ANDI    #$3F,       R0
-           XORI    #$80,       R0          ; transpose scan mode
+           XORI    #$40,       R0          ; normal scan mode
            MVO     R0,         $F8
            ; maybe EIS here
 
+           CLRR    R4              ; col pointer
+
+           MVII    #$EF,       R0          ; \_ drive row
+           MVO     R0,         $FE         ; /
+           MVI     $FF,        R1          ; \
+           ANDI    #$80,       R1          ;  > look for a 0 in column 7
+           BNE     @@no_d_key          ; /
+           MVII    #4, R4
+@@no_d_key:
+
+           ; maybe DIS here
+           MVI     $F8,        R1
+           ANDI    #$3F,       R1
+           XORI    #$80,       R1          ; transpose scan mode
+           MVO     R1,         $F8
+           ; maybe EIS here
+
+           MVII    #KBD_DECODE.no_mods, R3 ; neither shift nor ctrl
+
            MVII    #$7F,       R1          ; \_ drive column 7 to 0
            MVO     R1,         $FF         ; /
-           MVI     $FE,        R2          ; \
-           ANDI    #$40,       R2          ;  > look for a 0 in row 6
+           MVI     $FE,        R1          ; \
+           ANDI    #$40,       R1          ;  > look for a 0 in row 6
            BEQ     @@have_shift            ; /
 
            MVII    #$BF,       R1          ; \_ drive column 6 to 0
            MVO     R1,         $FF         ; /
-           MVI     $FE,        R2          ; \
-           ANDI    #$20,       R2          ;  > look for a 0 in row 5
+           MVI     $FE,        R1          ; \
+           ANDI    #$20,       R1          ;  > look for a 0 in row 5
            BNEQ    @@done_shift_ctrl       ; /
 
            MVII    #KBD_DECODE.control, R3
@@ -5298,8 +5324,11 @@ SCAN_KBD    PROC
            ;; ------------------------------------------------------------ ;;
            ;;  Start at col 7 and work our way to col 0.                   ;;
            ;; ------------------------------------------------------------ ;;
-           CLRR    R2              ; col pointer
+           CLRR    R2
            MVII    #$FF7F, R1
+
+	TSTR R4
+	BNE @@got_key
 
 @@col:      MVO     R1,     $FF
            MVI     $FE,    R0
@@ -5317,15 +5346,15 @@ SCAN_KBD    PROC
            ;;  Looks like a key is pressed.  Let's decode it.              ;;
            ;; ------------------------------------------------------------ ;;
 @@maybe_key:
-           MOVR    R2,     R4
+	MOVR R2,R4
            SARC    R0,     2
            BC      @@got_key       ; row 0
            BOV     @@got_key1      ; row 1
-           ADDI    #2,     R4 
+           ADDI    #2,     R4
            SARC    R0,     2
            BC      @@got_key       ; row 2
            BOV     @@got_key1      ; row 3
-           ADDI    #2,     R4 
+           ADDI    #2,     R4
            SARC    R0,     2
            BC      @@got_key       ; row 4
            BNOV    @@cont_col      ; row 5

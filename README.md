@@ -6,6 +6,8 @@
 
 This a BASIC language for the Intellivision Entertainment Computer System. I intend to make it as a (better) replacement for the incredibly slow and limited Intellivision ECS BASIC.
 
+I wrote an article in two parts about its development, you can read [part1 here](https://nanochess.org/ecs_basic.html) and [part2 here](https://nanochess.org/ecs_basic_2.html).
+
 It is written in CP1610 assembler language, and it has been tested both in emulation and with real hardware.
 
 For example, this program runs in 15 seconds (modified from a benchmark by carlsson):
@@ -37,6 +39,7 @@ The following statements are supported:
     VERIFY "file"
     REM comment
     DIM a(length)
+    DIM a(length),b(length)
     v = expr
     IF expr THEN line
     IF expr THEN statement
@@ -58,6 +61,7 @@ The following statements are supported:
     PRINT "string";expr$
     PRINT TAB(5);"string"
     PRINT SPC(5);"string"
+    PRINT AT 20
     PRINT AT 20;"string"
     GOSUB line
     RETURN
@@ -179,8 +183,10 @@ A small game in this flavor of BASIC:
     130 t=t+5:IF t>=160 THEN t=0:u=INT(RND*32)+8
     140 IF W=0 THEN GOTO 60
     150 SOUND 2,W+20,12:W=W-4
-    160 IF ABS(w-u)<8 AND ABS(v-t)<8 THEN t=164:w=0:SOUND 3,8000,9:SOUND 1,2048,48
+    160 IF ABS(w-u)<8 AND ABS(v-t)<8 THEN t=164:w=0:GOSUB 180
     170 GOTO 60
+    180 SOUND 3,8000,9:SOUND 1,2048,48
+    190 RETURN
 
 This game can be loaded using the jzintv emulator and the provided _tape_UFO.ecs_ file from the _utils_ directory.
  
