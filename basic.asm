@@ -1146,7 +1146,13 @@ bas_execute_line:	PROC
 	CALL bas_error
 
 @@1:	MVI@ R4,R0
-	TSTR R0
+	CMPI #TOKEN_INTEGER,R0
+	BNE @@4
+	ADDI #2,R4
+@@4:	CMPI #TOKEN_NUMBER,R0
+	BNE @@5
+	ADDI #4,R4
+@@5:	TSTR R0
 	BNE @@1
 	B @@0
 
