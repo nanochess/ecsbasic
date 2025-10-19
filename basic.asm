@@ -395,7 +395,7 @@ main_loop:
 	CALL bas_save_cursor	; Save content under the cursor.
 @@0:
 	CALL bas_blink_cursor	; Blink the cursor.
-	CALL SCAN_KBD		; Explore the keyboard.
+	CALL SCAN_KBD_DEBOUNCE		; Explore the keyboard.
 	CMPI #KEY.NONE,R0
 	BEQ @@0
 	CALL bas_restore_cursor	; Restore the content under the cursor.
@@ -696,7 +696,7 @@ bas_get_line:	PROC
 	CALL bas_save_cursor
 @@0:
 	CALL bas_blink_cursor
-	CALL SCAN_KBD
+	CALL SCAN_KBD_DEBOUNCE
 	CMPI #KEY.NONE,R0
 	BEQ @@0
 	CALL bas_restore_cursor
@@ -5279,7 +5279,26 @@ KBD_DECODE  PROC
            DECLE   KEY.LEFT, "[", $0E, $16, $18, $20       ; col 0
            ENDP
 
-SCAN_KBD    PROC
+SCAN_KBD_DEBOUNCE:	PROC
+	PSHR R5
+	CALL SCAN_KBD
+
+	CMPI #KEY.NONE, R0
+	BNE @@debounce
+	MVII #64,R4
+	MVO R4, ECS_KEY_LAST
+	B @@new
+
+@@debounce:
+           CMP     ECS_KEY_LAST, R4
+           MVO     R4,         ECS_KEY_LAST
+           BNEQ    @@new
+           MVII    #KEY.NONE,  R0
+@@new:
+	PULR PC
+	ENDP
+
+SCAN_KBD:    PROC
 
            ;; ------------------------------------------------------------ ;;
            ;;  Try to find CTRL and SHIFT first.                           ;;
@@ -5351,7 +5370,7 @@ SCAN_KBD    PROC
            BC    @@col
 
            MVII    #KEY.NONE,  R0
-           B       @@none
+           B       @@new
 
            ;; ------------------------------------------------------------ ;;
            ;;  Looks like a key is pressed.  Let's decode it.              ;;
@@ -5376,11 +5395,6 @@ SCAN_KBD    PROC
 
            CMPI    #KEY.NONE, R0   ; if invalid, keep scanning
            BEQ     @@cont_col
-
-           CMP     ECS_KEY_LAST, R4
-@@none:     MVO     R4,         ECS_KEY_LAST
-           BNEQ    @@new
-           MVII    #KEY.NONE,  R0
 
 @@new:      ; maybe DIS here
            MVI     $F8,        R1  ; \
