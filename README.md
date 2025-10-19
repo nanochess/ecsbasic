@@ -219,4 +219,7 @@ I've started a [thread in Atariage](https://forums.atariage.com/topic/385238-i-s
 * Hangman.
 * Lunatic Math.
 * Dogfight.
+* Spider Invasion.
+* Aircraft.
+* Parachute.
 
