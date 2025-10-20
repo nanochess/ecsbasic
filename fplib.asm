@@ -19,6 +19,7 @@
 	; Revision date: Oct/14/2025. Optimized division, normalization, fp2int, and fpsgn.
 	; Revision date: Oct/15/2025. Optimized integer conversion to avoid shifts.
 	; Revision date: Oct/16/2025. Added double bit shift for faster integer conversion.
+	; Revision date: Oct/19/2025. fpcomp now handles the zero cases.
 	;
 
 	; Temporary
@@ -400,9 +401,15 @@ fpcomp:	PROC
 	MVII #$00FF,R5
 	MOVR R1,R4
 	ANDR R5,R4
+	CMPI #$0080,R4
+	BEQ @@2		; Zero is special case.
 	XORI #$0080,R4	; So negative sign is lesser.
+@@2:
 	ANDR R3,R5
+	CMPI #$0080,R5
+	BEQ @@3		; Zero is special case.
 	XORI #$0080,R5	; So negative sign is lesser.
+@@3:
 	CMPR R5,R4
 	BNE @@1
 	;
