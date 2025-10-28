@@ -1386,20 +1386,20 @@ bas_generic_list: PROC
                 ; Token
 @@16:           MVII #COLOR_TOKEN,R1
                 MVO R1,bas_curcolor
-                MVII #keywords,R5
+                MVII #keywords,R5       ; Point to keywords list.
                 SUBI #TOKEN_START,R0
                 BEQ @@6
 @@7:            MVI@ R5,R1
-                TSTR R1
+                TSTR R1                 ; Jump over keyword.
                 BNE @@7
-                DECR R0
+                DECR R0                 ; Decrement counter.
                 BNE @@7
 @@6:            PSHR R4
-@@8:            MVI@ R5,R0
-                TSTR R0
-                BEQ @@9
+@@8:            MVI@ R5,R0              ; Read char.
+                TSTR R0                 ; Is it zero?
+                BEQ @@9                 ; Yes, jump.
                 PSHR R5
-                CALL indirect_output
+                CALL indirect_output    ; Display character.
                 PULR R5
                 B @@8
 
@@ -1553,14 +1553,14 @@ bas_lprint:     PROC
 bas_generic_print: PROC
                 PSHR R5
                 macro_get_next
-                CMPI #TOKEN_AT,R0       ; PRINT AT pos
-                BNE @@17
-                CALL bas_expr_int
-                CMPI #240,R0
-                BC @@10
+                CMPI #TOKEN_AT,R0       ; PRINT AT?
+                BNE @@17                ; No, jump.
+                CALL bas_expr_int       ; Get integer.
+                CMPI #240,R0            ; Exceeds screen?
+                BC @@10                 ; Yes, jump.
                 ADDI #$0200,R0
-                MVO R0,bas_ttypos
-                macro_get_next
+                MVO R0,bas_ttypos       ; Set up as new cursor position.
+                macro_get_next          ; Check for end of statement.
                 CMPI #TOKEN_COLON,R0
                 BEQ @@15
                 CMPI #TOKEN_ELSE,R0
@@ -1575,6 +1575,7 @@ bas_generic_print: PROC
                 ;
 @@3:
                 macro_get_next
+                ; Ending the statement at this point generates a new line.
 @@17:
                 TSTR R0
                 BEQ @@6
@@ -1583,16 +1584,16 @@ bas_generic_print: PROC
                 CMPI #TOKEN_ELSE,R0
                 BEQ @@6
 @@5:
-                CMPI #$22,R0            ; Quotes?
+                CMPI #$22,R0            ; Quotes start?
                 BNE @@2
 @@1:
                 MVI@ R4,R0
                 TSTR R0
                 BEQ @@6
-                CMPI #$22,R0            ; Quotes?
+                CMPI #$22,R0            ; Quotes end?
                 BEQ @@3
                 PSHR R4
-                CALL indirect_output
+                CALL indirect_output    ; Output the string.
                 PULR R4
                 B @@1
 
@@ -1611,7 +1612,7 @@ bas_generic_print: PROC
 @@6:
                 DECR R4
                 PSHR R4
-                MVII #BAS_CR,R0
+                MVII #BAS_CR,R0         ; New line.
                 CALL indirect_output
                 MVII #BAS_LF,R0
                 CALL indirect_output
@@ -1620,14 +1621,14 @@ bas_generic_print: PROC
 
 @@4:            CMPI #TOKEN_SPC,R0      ; SPC?
                 BNE @@11
-                CALL bas_expr_paren
+                CALL bas_expr_paren     ; Get expression.
                 BC bas_type_err
-                CALL fp2int
+                CALL fp2int             ; Convert to integer.
 @@12:           CMPI #0,R0
                 BLE @@3
                 PSHR R4
                 PSHR R0
-                MVII #$20,R0
+                MVII #$20,R0            ; Output space.
                 CALL indirect_output
                 PULR R0
                 PULR R4
@@ -1636,17 +1637,17 @@ bas_generic_print: PROC
 
 @@11:           CMPI #TOKEN_TAB,R0      ; TAB?
                 BNE @@14
-                CALL bas_expr_paren
+                CALL bas_expr_paren     ; Get expression.
                 BC bas_type_err
-                CALL fp2int
+                CALL fp2int             ; Convert to integer.
                 PSHR R0
                 MVII #$FFFF,R0
-                CALL indirect_output
+                CALL indirect_output    ; Get current column.
                 INCR R0                 ; Column starts with 1.
                 MOVR R0,R1
                 PULR R0
                 SUBR R1,R0
-                B @@12
+                B @@12                  ; Reuse SPC.
 
 @@14:
                 DECR R4
@@ -1711,14 +1712,16 @@ bas_input:      PROC
                 BEQ @@6
                 CMPI #TOKEN_ELSE,R0
                 BEQ @@6
-                CMPI #$22,R0
-                BNE @@4
+                CMPI #$22,R0            ; Quotes start?
+                BNE @@4                 ; No, jump.
 @@1:
                 MVI@ R4,R0
-                CMPI #$22,R0
-                BEQ @@2
+                TSTR R0                 ; End of line found?
+                BEQ @@5                 ; Yes, jump.
+                CMPI #$22,R0            ; Quotes end?
+                BEQ @@2                 ; Yes, jump.
                 PSHR R4
-                CALL bas_output
+                CALL bas_output         ; Display letter.
                 PULR R4
                 B @@1
 
@@ -1727,32 +1730,32 @@ bas_input:      PROC
                 BNE @@6
                 macro_get_next
 @@4:
-                CMPI #$41,R0
+                CMPI #$41,R0            ; Variable name A-Z?
                 BNC @@6
                 CMPI #$5B,R0
-                BC @@6
+                BC @@6                  ; No, jump.
                 MVI@ R4,R1
                 CMPI #$24,R1            ; String variable?
                 BEQ @@7
                 DECR R4
                 PSHR R4
                 PSHR R0
-                CALL bas_get_line
+                CALL bas_get_line       ; Read line.
                 macro_get_next
-                CALL fpparse
+                CALL fpparse            ; Parse floating-point number.
                 PULR R2
                 SUBI #$41,R2
                 SLL R2,1
                 MVII #variables,R5
                 ADDR R2,R5
-                MVO@ R0,R5
+                MVO@ R0,R5              ; Assign number.
                 MVO@ R1,R5
                 PULR R4
                 PULR PC
 
 @@7:            PSHR R4
                 PSHR R0
-                CALL bas_get_line
+                CALL bas_get_line       ; Read line.
                 SUBR R4,R5              ; Get length of string.
                 MOVR R5,R1
                 MOVR R4,R0
@@ -1760,7 +1763,7 @@ bas_input:      PROC
                 PULR R0
                 MVII #strings-$41,R1
                 ADDR R0,R1
-                CALL string_assign
+                CALL string_assign      ; Assign string.
                 PULR R4
                 PULR PC
 
@@ -1798,8 +1801,8 @@ bas_check_esc:  PROC
 bas_goto:       PROC
                 PSHR R5
 @@0:
-                CALL parse_integer
-                BC @@5
+                CALL parse_integer      ; Look for line number.
+                BC @@5                  ; Jump if not found.
 @@1:            ; Entry point for ON GOTO
                 CALL line_search
                 CMPR R1,R0
@@ -1821,25 +1824,25 @@ bas_goto:       PROC
                 ;
 bas_if:         PROC
                 PSHR R5
-                CALL bas_expr
-                BC @@0
+                CALL bas_expr           ; Process expression.
+                BC @@0                  ; Jump if not numeric.
                 ANDI #$7F,R3            ; Is it zero?
                 BEQ @@1                 ; Yes, jump.
                 macro_get_next
-                CMPI #TOKEN_THEN,R0
-                BNE @@2
+                CMPI #TOKEN_THEN,R0     ; Is it THEN?
+                BNE @@2                 ; No, jump.
                 macro_get_next
-                CMPI #TOKEN_INTEGER,R0
-                BNE @@3
+                CMPI #TOKEN_INTEGER,R0  ; Is it line number?
+                BNE @@3                 ; No, jump.
                 DECR R4
-                B bas_goto.0
+                B bas_goto.0            ; Yes, handle like GOTO.
 @@3:
                 PULR R5
                 DECR R4
                 B bas_execute
 @@2:
-                CMPI #TOKEN_GOTO,R0
-                BNE @@0
+                CMPI #TOKEN_GOTO,R0     ; Is it GOTO?
+                BNE @@0                 ; No, jump.
                 PULR R5
                 B bas_goto
 
@@ -1877,12 +1880,10 @@ bas_if:         PROC
                 ; Get next point for execution
                 ;
 get_next_point: PROC
-                PSHR R5
-                MVI bas_curline,R1
 @@2:
-                MVI@ R4,R0
-                TSTR R0
-                BEQ @@1
+                MVI@ R4,R0              ; Get next token.
+                TSTR R0                 ; Is it end of line?
+                BEQ @@1                 ; Yes, jump.
                 CMPI #$20,R0
                 BEQ @@2
                 CMPI #TOKEN_COLON,R0
@@ -1901,26 +1902,26 @@ get_next_point: PROC
                 BNE @@5
                 B @@1
 
-@@1:            MVI@ R4,R1
-                TSTR R1                 ; No more lines?
-                BEQ @@4
-                INCR R4
+@@1:            MVI@ R4,R1              ; Get line number.
+                TSTR R1                 ; End of program?
+                BEQ @@4                 ; Yes, jump.
+                INCR R4                 ; Jump over tokenized length.
                 B @@3
 @@4:
                 MVII #ERR_SYNTAX,R0
                 CALL bas_error
 @@3:
-                PULR PC
+                MOVR R5,PC
                 ENDP
 
                 ;
                 ; Get variable address
                 ;
 get_var_addr:   PROC
-                CMPI #$41,R0
+                CMPI #$41,R0            ; A-Z?
                 BNC @@1
                 CMPI #$5B,R0
-                BC @@1
+                BC @@1                  ; No, jump.
 @@0:
                 MOVR R0,R2
                 macro_get_next
@@ -1964,8 +1965,8 @@ get_var_addr:   PROC
 @@2:            DECR R4
                 SLL R2,1
                 MVII #variables-$41*2,R1
-                ADDR R2,R1
-                MOVR R5,PC
+                ADDR R2,R1              ; Get variable address.
+                MOVR R5,PC              ; Return.
 
 @@1:            MVII #ERR_SYNTAX,R0
                 CALL bas_error
@@ -5282,6 +5283,7 @@ KBD_DECODE      PROC
 @@shifted       DECLE KEY.NONE, "LJGDA" ; col 7
                 DECLE KEY.ENTER, "OUTE", KEY.NONE; col 6
                 DECLE ")*-$\"\'"                               ; col 5            DECLE   KEY.ESC, "(/+#="; col 4
+                DECLE KEY.ESC, "(/+#="  ; col 4
                 DECLE KEY.ESC, "(/+#="  ; col 4
                 DECLE KEY.ESC, "(/+#="  ; col 4
                 DECLE KEY.ESC, "(/+#="  ; col 4
