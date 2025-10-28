@@ -2567,14 +2567,14 @@ bas_dim:        PROC
 bas_mode:       PROC
                 PSHR R5
                 CALL bas_expr_int
-                CMPI #2,R0
+                CMPI #2,R0              ; Only MODE 0 and MODE 1 are valid.
                 BC @@1
                 MVO R0,_mode
                 macro_get_next
-                CMPI #$2C,R0
-                BNE @@2
-                CALL bas_expr_int
-                MVO R0,_mode_color
+                CMPI #$2C,R0            ; Is there a comma?
+                BNE @@2                 ; No, jump.
+                CALL bas_expr_int       ; Process an integer.
+                MVO R0,_mode_color      ; Use for background colors.
                 PULR PC
 
 @@2:            DECR R4
@@ -2589,8 +2589,8 @@ bas_mode:       PROC
                 ;
 bas_color:      PROC
                 PSHR R5
-                CALL bas_expr_int
-                MVO R0,bas_curcolor
+                CALL bas_expr_int       ; Process expression.
+                MVO R0,bas_curcolor     ; Use as current color.
                 PULR PC
                 ENDP
 
@@ -2599,13 +2599,13 @@ bas_color:      PROC
                 ;
 bas_define:     PROC
                 PSHR R5
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get GRAM number.
                 PSHR R0
                 macro_get_next
-                CMPI #$2C,R0
+                CMPI #$2C,R0            ; Look for comma.
                 BNE @@1
                 macro_get_next
-                CMPI #$22,R0
+                CMPI #$22,R0            ; Look for quotes.
                 BNE @@1
                 MVI bas_last_array,R3
                 INCR R3
@@ -2636,7 +2636,7 @@ bas_define:     PROC
                 INCR R3
                 B @@0
 
-@@2:            CMPI #$22,R0
+@@2:            CMPI #$22,R0            ; Look for ending quotes.
                 BNE @@1
 
                 MVI bas_last_array,R2
@@ -2644,16 +2644,19 @@ bas_define:     PROC
                 SUBR R2,R3
                 SLR R3,2
                 BEQ @@1
-                MVO R3,_gram_total
-                MVO R2,_gram_bitmap
+                MVO R3,_gram_total      ; Setup total GRAM for definition.
+                MVO R2,_gram_bitmap     ; Pointer to GRAM bitmap.
                 PULR R0
-                MVO R0,_gram_target
+                MVO R0,_gram_target     ; Select GRAM number for definition.
 
                 PULR PC
 
 @@1:            MVII #ERR_SYNTAX,R0
                 CALL bas_error
 
+                ;
+                ; Convert hexadecimal digit.
+                ;
 @@convert_hex:
                 MVI@ R4,R0
                 CMPI #$61,R0
@@ -2685,7 +2688,7 @@ bas_define:     PROC
                 ;
 bas_sprite:     PROC
                 PSHR R5
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get sprite number.
                 CMPI #8,R0
                 BC @@1
                 ADDI #_mobs,R0
@@ -2698,7 +2701,7 @@ bas_sprite:     PROC
                 CMPI #$2C,R0
                 BEQ @@4
                 DECR R4
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get X.
                 PULR R3
                 PSHR R3
                 MVO@ R0,R3
@@ -2714,7 +2717,7 @@ bas_sprite:     PROC
                 CMPI #$2C,R0
                 BEQ @@5
                 DECR R4
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get Y.
                 PULR R3
                 PSHR R3
                 ADDI #8,R3
@@ -2727,7 +2730,7 @@ bas_sprite:     PROC
                 CMPI #$2C,R0
                 BNE @@2
 @@5:
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get frame.
                 PULR R3
                 PSHR R3
                 ADDI #16,R3
@@ -2750,9 +2753,10 @@ bas_sprite:     PROC
                 ;
 bas_wait:       PROC
                 PSHR R5
+                ; Cannot use _int here because it could be an old interrupt.
                 MVI _frame,R0
 @@1:
-                CMP _frame,R0
+                CMP _frame,R0           ; Wait for video interrupt to happen.
                 BEQ @@1
                 PULR PC
                 ENDP
@@ -2762,7 +2766,7 @@ bas_wait:       PROC
                 ;
 bas_sound:      PROC
                 PSHR R5
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get register number.
                 PSHR R0
                 macro_get_next
                 CMPI #$2C,R0
@@ -2773,15 +2777,15 @@ bas_sound:      PROC
                 DECR R4
 @@12:
                 PULR R1
-                TSTR R1
+                TSTR R1                 ; SOUND 0
                 BEQ @@0
-                DECR R1
+                DECR R1                 ; SOUND 1
                 BEQ @@1
-                DECR R1
+                DECR R1                 ; SOUND 2
                 BEQ @@2
-                DECR R1
+                DECR R1                 ; SOUND 3
                 BEQ @@3
-                DECR R1
+                DECR R1                 ; SOUND 4
                 BEQ @@4
                 MVII #ERR_BOUNDS,R0
                 CALL bas_error
@@ -2871,10 +2875,10 @@ bas_sound:      PROC
                 ;
 bas_border:     PROC
                 PSHR R5
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get number.
                 CMPI #16,R0
                 BC @@1
-                MVO R0,_border_color
+                MVO R0,_border_color    ; Set as border color.
                 PULR PC
 
 @@1:            MVII #ERR_BOUNDS,R0
@@ -2886,14 +2890,14 @@ bas_border:     PROC
                 ;
 bas_poke:       PROC
                 PSHR R5
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get address.
                 PSHR R0
                 macro_get_next
-                CMPI #$2C,R0
+                CMPI #$2C,R0            ; Get comma.
                 BNE @@1
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get word.
                 PULR R1
-                MVO@ R0,R1
+                MVO@ R0,R1              ; Write into memory.
                 PULR PC
 
 @@1:            MVII #ERR_SYNTAX,R0
@@ -2906,12 +2910,12 @@ bas_poke:       PROC
                 ;
 bas_on:         PROC
                 PSHR R5
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get expression.
                 PSHR R0
                 macro_get_next
-                CMPI #TOKEN_GOTO,R0
+                CMPI #TOKEN_GOTO,R0     ; ON GOTO?
                 BEQ @@1
-                CMPI #TOKEN_GOSUB,R0
+                CMPI #TOKEN_GOSUB,R0    ; ON GOSUB?
                 BEQ @@1
 
 @@6:            MVII #ERR_SYNTAX,R0
@@ -2979,22 +2983,22 @@ bas_on:         PROC
                 ;
 bas_plot:       PROC
                 PSHR R5
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get X-coordinate.
                 MVO R0,plot_x
                 macro_get_next
-                CMPI #$2C,R0
+                CMPI #$2C,R0            ; Get comma.
                 BNE @@1
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get Y-coordinate.
                 MVO R0,plot_y
                 macro_get_next
-                CMPI #$2C,R0
+                CMPI #$2C,R0            ; Get comma.
                 BNE @@1
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get color.
                 ANDI #7,R0
                 MOVR R0,R2
-                MVI plot_x,R0
+                MVI plot_x,R0           ; Save current coordinates.
                 MVI plot_y,R1
-                CALL draw_pixel
+                CALL draw_pixel         ; Draw pixel.
                 PULR PC
 
 @@1:            MVII #ERR_SYNTAX,R0
@@ -3006,25 +3010,25 @@ bas_plot:       PROC
                 ;
 bas_draw:       PROC
                 PSHR R5
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get target X-coordinate.
                 MVO R0,draw_x
                 macro_get_next
-                CMPI #$2C,R0
+                CMPI #$2C,R0            ; Get comma.
                 BNE @@1
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get target Y-coordinate.
                 MVO R0,draw_y
                 macro_get_next
-                CMPI #$2C,R0
+                CMPI #$2C,R0            ; Get comma.
                 BNE @@1
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get color.
                 ANDI #7,R0
                 MOVR R0,R2
                 PSHR R4
-                CALL draw_line
+                CALL draw_line          ; Draw line.
                 PULR R4
                 MVI draw_x,R0
                 MVI draw_y,R1
-                MVO R0,plot_x
+                MVO R0,plot_x           ; Save new coordinates.
                 MVO R1,plot_y
                 PULR PC
 
@@ -3039,22 +3043,22 @@ bas_draw:       PROC
                 ;
 bas_circle:     PROC
                 PSHR R5
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get X-coordinate.
                 MVO R0,plot_x
                 macro_get_next
-                CMPI #$2C,R0
+                CMPI #$2C,R0            ; Get comma.
                 BNE @@1
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get Y-coordinate.
                 MVO R0,plot_y
                 macro_get_next
-                CMPI #$2C,R0
+                CMPI #$2C,R0            ; Get comma.
                 BNE @@1
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get radius.
                 MVO R0,sign_x
                 macro_get_next
-                CMPI #$2C,R0
+                CMPI #$2C,R0            ; Get comma.
                 BNE @@1
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get color.
                 ANDI #7,R0
                 MOVR R0,R2
                 MVI sign_x,R0
@@ -3165,7 +3169,7 @@ draw_circle:    PROC
                 ENDP
 
                 ;
-                ; Draw a line
+                ; Draw a line using the Bresenham algorithm.
                 ;
 draw_line:      PROC
                 PSHR R5
@@ -3262,9 +3266,9 @@ draw_pixel:     PROC
                 PSHR R4
                 MOVR R3,R4
                 ANDI #$1800,R4
-                CMPI #$1000,R4
-                BEQ @@7
-                MVII #$37FF,R3
+                CMPI #$1000,R4          ; Word already in coloured squares mode?
+                BEQ @@7                 ; Yes, jump.
+                MVII #$37FF,R3          ; Get erased pixel for working.
 @@7:            PULR R4
                 RRC R1,1
                 BC @@3
@@ -3310,18 +3314,18 @@ draw_pixel:     PROC
                 ;
 bas_bk:         PROC
                 PSHR R5
-                CALL bas_expr_paren
+                CALL bas_expr_paren     ; Get index.
                 CALL fp2int
                 CMPI #$240,R0
                 BC @@1
                 PSHR R0
                 macro_get_next
-                CMPI #TOKEN_EQ,R0
+                CMPI #TOKEN_EQ,R0       ; =
                 BNE @@2
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get card.
                 PULR R5
                 ADDI #$0200,R5
-                MVO@ R0,R5
+                MVO@ R0,R5              ; Put into the screen.
                 PULR PC
 
 @@1:            MVII #ERR_BOUNDS,R0
@@ -3336,7 +3340,7 @@ bas_bk:         PROC
                 ;
 bas_filename:   PROC
                 PSHR R5
-                MVII #_filename,R5
+                MVII #_filename,R5      ; Erase space for filename.
                 MVII #$20,R0
                 MVO@ R0,R5
                 MVO@ R0,R5
@@ -3345,15 +3349,15 @@ bas_filename:   PROC
                 MVII #_filename,R3
 
                 macro_get_next
-                CMPI #$22,R0
+                CMPI #$22,R0            ; Quotes start?
                 BNE @@1
 @@2:
                 MVI@ R4,R0
-                CMPI #$22,R0
+                CMPI #$22,R0            ; Quotes ending?
                 BEQ @@3
-                CMPI #_filename+4,R3
-                BEQ @@2
-                CMPI #$61,R0
+                CMPI #_filename+4,R3    ; Already four letters in filename?
+                BEQ @@2                 ; Yes, jump.
+                CMPI #$61,R0            ; Make uppercase.
                 BNC @@4
                 CMPI #$7B,R0
                 BC @@4
@@ -3385,32 +3389,32 @@ bas_filename:   PROC
                 ; Load a program from tape.
                 ;
 bas_load:       PROC
-                CALL bas_filename
-                CALL new_program
-                CALL cassette_init
-                CALL cassette_load
+                CALL bas_filename       ; Process filename.
+                CALL new_program        ; Erase program.
+                CALL cassette_init      ; Start cassette.
+                CALL cassette_load      ; Find header and start load.
                 CMPI #1,R0
                 BEQ @@1
                 CMPI #2,R0
                 BEQ @@2
                 MVII #program_start,R4
-@@3:            CALL cassette_read_word
-                MVO@ R0,R4
+@@3:            CALL cassette_read_word ; Read word.
+                MVO@ R0,R4              ; Save line number.
                 TSTR R0
                 BEQ @@0
-                CALL cassette_read_word
-                MVO@ R0,R4
+                CALL cassette_read_word ; Read word.
+                MVO@ R0,R4              ; Save line length.
                 MOVR R0,R2
-@@4:            CALL cassette_read
-                MVO@ R0,R4
+@@4:            CALL cassette_read      ; Read byte.
+                MVO@ R0,R4              ; Save tokenized data.
                 DECR R2
                 BNE @@4
                 B @@3
 
 @@0:            DECR R4
                 MVO R4,program_end
-                CALL restart_pointers
-                CALL cassette_stop
+                CALL restart_pointers   ; Prepare for future execution.
+                CALL cassette_stop      ; Stop the cassette.
                 ; Program read completely.
                 B basic_restart
 
@@ -3429,24 +3433,24 @@ bas_load:       PROC
                 ; Save a program to tape.
                 ;
 bas_save:       PROC
-                CALL bas_filename
-                CALL cassette_init
-                CALL cassette_save
+                CALL bas_filename       ; Process filename.
+                CALL cassette_init      ; Start cassette.
+                CALL cassette_save      ; Start saving header.
                 MVII #program_start,R4
-@@1:            MVI@ R4,R0
-                CALL cassette_write_word
+@@1:            MVI@ R4,R0              ; Get line number.
+                CALL cassette_write_word; Send to cassette.
                 TSTR R0
                 BEQ @@2
-                MVI@ R4,R0
-                CALL cassette_write_word
+                MVI@ R4,R0              ; Get line length.
+                CALL cassette_write_word; Send to cassette.
                 MOVR R0,R2
-@@3:            MVI@ R4,R0
-                CALL cassette_write
+@@3:            MVI@ R4,R0              ; Get tokenized data.
+                CALL cassette_write     ; Send to cassette.
                 DECR R2
                 BNE @@3
                 B @@1
 
-@@2:            CALL cassette_stop
+@@2:            CALL cassette_stop      ; Stop the cassette.
                 B basic_restart
                 ENDP
 
@@ -3454,31 +3458,31 @@ bas_save:       PROC
                 ; Verify a program from tape.
                 ;
 bas_verify:     PROC
-                CALL bas_filename
-                CALL cassette_init
-                CALL cassette_load
+                CALL bas_filename       ; Process filename.
+                CALL cassette_init      ; Start cassette.
+                CALL cassette_load      ; Find header and start load.
                 CMPI #1,R0
                 BEQ @@1
                 CMPI #2,R0
                 BEQ @@2
                 MVII #program_start,R4
-@@3:            CALL cassette_read_word
-                CMP@ R4,R0
-                BNE @@5
+@@3:            CALL cassette_read_word ; Read line number.
+                CMP@ R4,R0              ; Same?
+                BNE @@5                 ; No, jump.
                 TSTR R0
                 BEQ @@0
-                CALL cassette_read_word
-                CMP@ R4,R0
-                BNE @@5
+                CALL cassette_read_word ; Read tokenized length.
+                CMP@ R4,R0              ; Same?
+                BNE @@5                 ; No, jump.
                 MOVR R0,R2
-@@4:            CALL cassette_read
-                CMP@ R4,R0
-                BNE @@5
+@@4:            CALL cassette_read      ; Read tokenized program.
+                CMP@ R4,R0              ; Same?
+                BNE @@5                 ; No, jump.
                 DECR R2
                 BNE @@4
                 B @@3
 
-@@0:            CALL cassette_stop
+@@0:            CALL cassette_stop      ; Stop the cassette.
                 ; Program verified completely
                 B basic_restart
 
@@ -3512,10 +3516,10 @@ bas_syntax_error: PROC
                 ;
 bas_expr_int:   PROC
                 PSHR R5
-                CALL bas_expr
+                CALL bas_expr           ; Process expression.
                 MOVR R2,R0
                 MOVR R3,R1
-                CALL fp2int
+                CALL fp2int             ; Conversion to integer.
                 PULR PC
                 ENDP
 
@@ -3538,7 +3542,7 @@ bas_expr:       PROC
                 CALL bas_expr1
                 BC @@0                  ; Jump if string.
 @@2:            macro_get_next
-                CMPI #TOKEN_OR,R0
+                CMPI #TOKEN_OR,R0       ; OR
                 BNE @@1
                 MOVR R2,R0
                 MOVR R3,R1
@@ -3569,7 +3573,7 @@ bas_expr1:      PROC
                 CALL bas_expr2
                 BC @@0                  ; Jump if string.
 @@2:            macro_get_next
-                CMPI #TOKEN_XOR,R0
+                CMPI #TOKEN_XOR,R0      ; XOR
                 BNE @@1
                 MOVR R2,R0
                 MOVR R3,R1
@@ -3597,7 +3601,7 @@ bas_expr2:      PROC
                 CALL bas_expr3
                 BC @@0                  ; Jump if string.
 @@2:            macro_get_next
-                CMPI #TOKEN_AND,R0
+                CMPI #TOKEN_AND,R0      ; AND
                 BNE @@1
                 MOVR R2,R0
                 MOVR R3,R1
@@ -3620,6 +3624,9 @@ bas_expr2:      PROC
 @@0:            PULR PC
                 ENDP
 
+                ;
+                ; Relational operators = <> < > <= >=
+                ;
 bas_expr3:      PROC
                 PSHR R5
                 CALL bas_expr4
@@ -3783,6 +3790,9 @@ bas_expr3:      PROC
 
                 ENDP
 
+                ;
+                ; Addition and subtraction operators
+                ;
 bas_expr4:      PROC
                 PSHR R5
                 CALL bas_expr5
@@ -3844,6 +3854,9 @@ bas_expr4:      PROC
                 PULR PC
                 ENDP
 
+                ;
+                ; Multiplication, division, and power-of operators.
+                ;
 bas_expr5:      PROC
                 PSHR R5
                 CALL bas_expr6
@@ -3902,6 +3915,9 @@ bas_expr5:      PROC
 @@3:            PULR PC
                 ENDP
 
+                ;
+                ; Unary operators.
+                ;
 bas_expr6:      PROC
                 macro_get_next
                 CMPI #$2D,R0            ; Minus?
@@ -3937,6 +3953,9 @@ bas_expr6:      PROC
 
                 ENDP
 
+                ;
+                ; Process expression between parenthesis.
+                ;
 bas_expr_paren: PROC
                 PSHR R5
                 macro_get_next
@@ -3956,6 +3975,9 @@ bas_expr_paren: PROC
                 CALL bas_error
                 ENDP
 
+                ;
+                ; Process functions, variables, strings, and numbers.
+                ;
 bas_expr7:      PROC
                 PSHR R5
                 macro_get_next
