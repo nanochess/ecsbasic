@@ -1785,7 +1785,7 @@ bas_check_esc:  PROC
 
                 PSHR R4
                 PSHR R5
-                CALL SCAN_KBD
+                CALL SCAN_KBD           ; Explore the keyboard.
                 PULR R5
                 PULR R4
                 CMPI #KEY.ESC,R0
@@ -1985,40 +1985,41 @@ get_var_addr:   PROC
 bas_for:        PROC
                 PSHR R5
                 MVI bas_forptr,R5
-                CMPI #end_for-5,R5
-                BC @@1
+                CMPI #end_for-5,R5      ; Check if space available for FOR?
+                BC @@1                  ; No, jump.
                 ; Try an assignment
                 macro_get_next
-                CALL get_var_addr
+                CALL get_var_addr       ; Get variable address.
                 MVI bas_forptr,R3
                 MVO@ R1,R3              ; Take note of the variable.
                 PSHR R1
                 macro_get_next
-                CMPI #TOKEN_EQ,R0
+                CMPI #TOKEN_EQ,R0       ; =
                 BNE @@2
-                CALL bas_expr
+                CALL bas_expr           ; Process expression.
+                BC @@2                  ; Error if not numeric.
                 PULR R5
                 MVO@ R2,R5              ; Assign initial value.
                 MVO@ R3,R5
                 macro_get_next
-                CMPI #TOKEN_TO,R0
+                CMPI #TOKEN_TO,R0       ; TO
                 BNE @@2
                 MVI bas_forptr,R3
                 INCR R3
                 INCR R3
-                MVO@ R4,R3              ; Take note of TO expression
-                CALL bas_expr           ; Evaluate once
+                MVO@ R4,R3              ; Take note of TO expression.
+                CALL bas_expr           ; Evaluate once.
                 macro_get_next
                 MVI bas_forptr,R3
                 INCR R3
                 CMPI #TOKEN_STEP,R0
                 BNE @@3
-                MVO@ R4,R3              ; Take note of STEP expression
-                CALL bas_expr           ; Evaluate once
+                MVO@ R4,R3              ; Take note of STEP expression.
+                CALL bas_expr           ; Evaluate once.
                 B @@4
 
 @@3:            CLRR R2
-                MVO@ R2,R3              ; No STEP expression
+                MVO@ R2,R3              ; No STEP expression.
                 DECR R4
 @@4:            PSHR R4
                 CALL get_next_point
@@ -2026,9 +2027,9 @@ bas_for:        PROC
                 INCR R3
                 INCR R3
                 INCR R3
-                MVO@ R4,R3              ; Parsing position
+                MVO@ R4,R3              ; Parsing position.
                 INCR R3
-                MVO@ R1,R3              ; Line
+                MVO@ R1,R3              ; Line.
                 INCR R3
                 MVO R3,bas_forptr
                 PULR R4
@@ -2047,10 +2048,10 @@ bas_for:        PROC
                 ;
 bas_next:       PROC
                 PSHR R5
-                CALL bas_check_esc
-                MVI bas_forptr,R5
-                CMPI #start_for,r5
-                BNE @@1
+                CALL bas_check_esc      ; Check for Esc key.
+                MVI bas_forptr,R5       ; Get latest FOR loop.
+                CMPI #start_for,r5      ; Nothing?
+                BNE @@1                 ; No, jump.
 @@0:
                 MVII #ERR_NEXT,R0
                 CALL bas_error
@@ -2059,7 +2060,7 @@ bas_next:       PROC
                 BNC @@2
                 CMPI #$5B,R0
                 BC @@2                  ; No, jump.
-                CALL get_var_addr.0
+                CALL get_var_addr.0     ; Get variable address.
                 MVI bas_forptr,R3
 @@3:            CMPI #start_for,R3
                 BEQ @@0
@@ -2099,7 +2100,7 @@ bas_next:       PROC
                 MOVR R3,R4
                 ANDI #$80,R4
                 MVO R4,temp1
-                CALL fpadd
+                CALL fpadd              ; Do addition/subtraction.
                 PULR R5
                 PULR R3
                 MVO@ R0,R3              ; Save new value.
@@ -2109,7 +2110,7 @@ bas_next:       PROC
                 PSHR R5
                 PSHR R0
                 PSHR R1
-                CALL bas_expr
+                CALL bas_expr           ; Process TO expression.
                 PULR R1
                 PULR R0
                 MVI temp1,R4
@@ -2146,19 +2147,19 @@ bas_next:       PROC
                 ;
 bas_gosub:      PROC
                 PSHR R5
-                CALL parse_integer
-                BC @@0
+                CALL parse_integer      ; Find line number.
+                BC @@0                  ; No, jump.
 @@1:            ; Entry point for ON GOSUB
                 MOVR R0,R2
                 CALL get_next_point
                 MVI bas_gosubptr,R5
-                CMPI #end_gosub-2,R5
-                BC @@5
+                CMPI #end_gosub-2,R5    ; GOSUB stack filled?
+                BC @@5                  ; Yes, jump.
                 MVO@ R4,R5
                 MVO@ R1,R5
                 MVO R5,bas_gosubptr
                 MOVR R2,R0
-                CALL line_search
+                CALL line_search        ; Search for the line.
                 CMPR R1,R0
                 BEQ @@3
                 MVII #ERR_LINE,R0
@@ -2183,13 +2184,13 @@ bas_gosub:      PROC
 bas_return:     PROC
                 PSHR R5
                 MVI bas_gosubptr,R5
-                CMPI #start_gosub,r5
-                BNE @@1
+                CMPI #start_gosub,r5    ; Something on the stack?
+                BNE @@1                 ; No, jump.
                 MVII #ERR_RETURN,R0
                 CALL bas_error
 @@1:            DECR R5
                 DECR R5
-                MVO R5,bas_gosubptr
+                MVO R5,bas_gosubptr     ; Pop stack.
                 MVI@ R5,R4
                 MVI@ R5,R1
                 MVO R1,bas_curline
@@ -2253,8 +2254,8 @@ data_locate:    PROC
                 ;
 bas_restore:    PROC
                 PSHR R5
-                CALL parse_integer
-                BC @@1
+                CALL parse_integer      ; Find line number.
+                BC @@1                  ; Jump if there is none.
                 PSHR R4
                 CALL line_search
                 CMPR R1,R0
@@ -4583,7 +4584,7 @@ bas_expr7:      PROC
                 ; INKEY$
 @@INKEY:
                 PSHR R4
-                CALL SCAN_KBD
+                CALL SCAN_KBD           ; Explore the keyboard.
                 CLRR R1
                 CMPI #KEY.NONE,R0
                 BEQ @@27
@@ -5299,6 +5300,9 @@ KBD_DECODE      PROC
                 DECLE KEY.LEFT, "[", $0E, $16, $18, $20; col 0
                 ENDP
 
+                ;
+                ; Explore the keyboard with debouncing.
+                ;
 SCAN_KBD_DEBOUNCE: PROC
                 PSHR R5
                 CALL SCAN_KBD
@@ -5318,6 +5322,9 @@ SCAN_KBD_DEBOUNCE: PROC
                 PULR PC
                 ENDP
 
+                ;
+                ; Explore the keyboard.
+                ;
 SCAN_KBD:       PROC
 
                 ;; ------------------------------------------------------------ ;;
