@@ -5282,17 +5282,7 @@ KBD_DECODE      PROC
 
 @@shifted       DECLE KEY.NONE, "LJGDA" ; col 7
                 DECLE KEY.ENTER, "OUTE", KEY.NONE; col 6
-                DECLE ")*-$\"\'"                               ; col 5            DECLE   KEY.ESC, "(/+#="; col 4
-                DECLE KEY.ESC, "(/+#="  ; col 4
-                DECLE KEY.ESC, "(/+#="  ; col 4
-                DECLE KEY.ESC, "(/+#="  ; col 4
-                DECLE KEY.ESC, "(/+#="  ; col 4
-                DECLE KEY.ESC, "(/+#="  ; col 4
-                DECLE KEY.ESC, "(/+#="  ; col 4
-                DECLE KEY.ESC, "(/+#="  ; col 4
-                DECLE KEY.ESC, "(/+#="  ; col 4
-                DECLE KEY.ESC, "(/+#="  ; col 4
-                DECLE KEY.ESC, "(/+#="  ; col 4
+                DECLE ")*-$\"\'"        ; col 5
                 DECLE KEY.ESC, "(/+#="  ; col 4
                 DECLE "PIYRWQ"          ; col 3
                 DECLE ":KHFS^"          ; col 2
