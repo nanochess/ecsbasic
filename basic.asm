@@ -4677,6 +4677,7 @@ bas_expr7:      PROC
                 INCR R0
                 B @@29
 
+                ; String comparison for INSTR.
 @@string_comparison_portion:
                 PSHR R5
                 PSHR R0
@@ -4688,15 +4689,15 @@ bas_expr7:      PROC
                 TSTR R1
                 BEQ @@32
 @@33:           MVI@ R4,R0
-                CMP@ R5,R0
+                CMP@ R5,R0              ; Compare string.
                 BNE @@34
                 DECR R1
                 BNE @@33
-@@32:           SETC
+@@32:           SETC                    ; Match found.
                 PULR R0
                 PULR PC
 
-@@34:           CLRC
+@@34:           CLRC                    ; Not matched.
                 PULR R0
                 PULR PC
 
@@ -4740,10 +4741,10 @@ bas_expr7:      PROC
                 SETC                    ; String
                 PULR PC
 
-@@12:           CALL bas_expr
+@@12:           CALL bas_expr           ; Process expression.
                 GSWD R1
                 macro_get_next
-                CMPI #$29,R0
+                CMPI #$29,R0            ; Closing parenthesis.
                 BNE @@2
                 RSWD R1
                 PULR PC
@@ -4761,20 +4762,20 @@ bas_expr7:      PROC
 @@18:
                 MOVR R4,R1
                 MOVR R5,R0
-                CALL string_create
+                CALL string_create      ; Copy string.
                 PULR R4
                 SETC                    ; String
                 PULR PC
 
 @@17:           DECR R4
-                CALL get_var_addr.0
-                MVI@ R1,R2
+                CALL get_var_addr.0     ; Get variable address.
+                MVI@ R1,R2              ; Read value.
                 INCR R1
                 MVI@ R1,R3
                 CLRC
                 PULR PC
 
-@@11:           MVI@ R4,R3
+@@11:           MVI@ R4,R3              ; Read floating-point number.
                 MVI@ R4,R1
                 SWAP R1
                 ADDR R1,R3
@@ -4785,7 +4786,7 @@ bas_expr7:      PROC
                 CLRC
                 PULR PC
 
-@@37:           MVI@ R4,R0
+@@37:           MVI@ R4,R0              ; Read integer.
                 MVI@ R4,R1
                 SWAP R1
                 ADDR R1,R0
@@ -4807,20 +4808,20 @@ bas_expr7:      PROC
                 ;
 parse_integer:  PROC
                 macro_get_next
-                CMPI #TOKEN_INTEGER,R0
+                CMPI #TOKEN_INTEGER,R0  ; Integer here?
                 BNE @@1
-                MVI@ R4,R0
-                MVI@ R4,R1
+                MVI@ R4,R0              ; Get first byte.
+                MVI@ R4,R1              ; Get second byte.
                 SWAP R1
-                ADDR R1,R0
+                ADDR R1,R0              ; Carry flag cleared.
                 MOVR R5,PC
 
-@@1:            SETC
+@@1:            SETC                    ; No integer here.
                 MOVR R5,PC
                 ENDP
 
                 ;
-                ; Get string address.
+                ; Get string variable address.
                 ; Input:
                 ;   R0 = String letter (A-Z)
                 ; Output:
@@ -4845,15 +4846,15 @@ get_string_addr: PROC
 string_create:  PROC
                 PSHR R5
                 MOVR R0,R4
-                MVI bas_strptr,R5
+                MVI bas_strptr,R5       ; Get string stack pointer.
                 SUBR R1,R5
                 DECR R5
-                MVO R5,bas_strptr
-                MVO@ R1,R5
+                MVO R5,bas_strptr       ; Push string.
+                MVO@ R1,R5              ; Take note of length.
                 TSTR R1
                 BEQ @@2
 @@1:
-                MVI@ R4,R0
+                MVI@ R4,R0              ; Copy string.
                 MVO@ R0,R5
                 DECR R1
                 BNE @@1
@@ -4878,11 +4879,11 @@ string_create:  PROC
                 ;
 string_create_simple: PROC
                 PSHR R5
-                MVI bas_strptr,R5
+                MVI bas_strptr,R5       ; Get string stack pointer.
                 SUBR R0,R5
                 DECR R5
-                MVO R5,bas_strptr
-                MVO@ R0,R5
+                MVO R5,bas_strptr       ; Push string.
+                MVO@ R0,R5              ; Take note of length.
                 MVI bas_strptr,R3
                 CMP bas_last_array,R3
                 BEQ @@3
@@ -4908,7 +4909,7 @@ string_comparison: PROC
                 TSTR R2
                 BEQ @@5
                 MVI@ R1,R4
-                CMP@ R3,R4
+                CMP@ R3,R4              ; Compare characters.
                 BEQ @@6
                 BNC @@3
 @@5:            MVII #1,R0              ; >
@@ -4943,24 +4944,24 @@ string_concat:  PROC
                 INCR R3
                 MOVR R0,R4
                 ADDR R2,R4
-                MVI bas_strptr,R5
+                MVI bas_strptr,R5       ; Get string stack pointer.
                 SUBR R4,R5              ; Space for string
                 DECR R5                 ; Space for length
-                MVO R5,bas_strptr
+                MVO R5,bas_strptr       ; Push string.
                 MVO@ R4,R5
-                TSTR R0
-                BEQ @@1
+                TSTR R0                 ; Left string has zero length?
+                BEQ @@1                 ; Yes, jump.
 @@2:
-                MVI@ R1,R4
+                MVI@ R1,R4              ; Copy string.
                 MVO@ R4,R5
                 INCR R1
                 DECR R0
                 BNE @@2
 @@1:
-                TSTR R2
-                BEQ @@3
+                TSTR R2                 ; Right string has zero length?
+                BEQ @@3                 ; Yes, jump.
 @@4:
-                MVI@ R3,R4
+                MVI@ R3,R4              ; Copy string.
                 MVO@ R4,R5
                 INCR R3
                 DECR R2
@@ -4989,14 +4990,14 @@ string_assign:  PROC
                 ;
                 ; Erase the used space of the stack.
                 ;
-                MOVR R3,R2
-                MVI@ R2,R0
-                INCR R2
-                ADDR R0,R2
+                MOVR R3,R2              ; Get new string.
+                MVI@ R2,R0              ; Get length of string.
+                INCR R2                 ; Jump over length.
+                ADDR R0,R2              ; Jump over string.
                 MVI bas_strbase,R0
-                CMPR R0,R2
-                BC @@3
-@@4:            MVO@ R4,R2
+                CMPR R0,R2              ; There is space between this pointer and strbase?
+                BC @@3                  ; No, jump.
+@@4:            MVO@ R4,R2              ; Fill the unused space.
                 INCR R2
                 CMPR R0,R2
                 BNC @@4
@@ -5004,15 +5005,15 @@ string_assign:  PROC
                 ;
                 ; Erase the old string.
                 ;
-                MVI@ R1,R2
-                TSTR R2
-                BEQ @@1
+                MVI@ R1,R2              ; Get old string.
+                TSTR R2                 ; Nothing?
+                BEQ @@1                 ; No, jump.
                 MVI@ R2,R0
-                MVO@ R4,R2
+                MVO@ R4,R2              ; Erase length.
                 INCR R2
                 TSTR R0
                 BEQ @@1
-@@2:            MVO@ R4,R2
+@@2:            MVO@ R4,R2              ; Erase string.
                 INCR R2
                 DECR R0
                 BNE @@2
@@ -5030,20 +5031,20 @@ string_assign:  PROC
                 DECR R2
                 CMP bas_strbase,R2
                 BNC @@9
-                CMP@ R2,R4
-                BEQ @@8
+                CMP@ R2,R4              ; Found a space?
+                BEQ @@8                 ; Yes, jump.
 @@9:            INCR R2
-                MVI@ R3,R0
-                INCR R0
-                CMPR R0,R5              ; The string fits?
-                BNC @@7
+                MVI@ R3,R0              ; Get new string length.
+                INCR R0                 ; Integrate the length.
+                CMPR R0,R5              ; The new string fits?
+                BNC @@7                 ; No, jump.
                 ;
                 ; The string fits in previous space.
                 ;
                 MOVR R3,R4
                 MOVR R2,R5
                 MVO@ R2,R1              ; New address.
-@@10:           MVI@ R4,R2
+@@10:           MVI@ R4,R2              ; Copy string and length.
                 MVO@ R2,R5
                 DECR R0
                 BNE @@10
@@ -5076,7 +5077,7 @@ bas_save_cursor: PROC
                 ;
 bas_blink_cursor: PROC
 @@0:            MVI _int,R0
-                TSTR R0
+                TSTR R0                 ; Wait for a video frame to happen.
                 BEQ @@0
                 CLRR R0
                 MVO R0,_int
@@ -5136,18 +5137,18 @@ bas_output:     PROC
                 BC @@18
                 CMPI #$20,R0
                 BC @@0
-                CMPI #BAS_CR,R0
-                BEQ @@5
-                CMPI #BAS_LF,R0
-                BEQ @@3
-                CMPI #KEY.LEFT,R0
-                BEQ @@7
-                CMPI #KEY.RIGHT,R0
-                BEQ @@10
-                CMPI #KEY.UP,R0
-                BEQ @@12
-                CMPI #KEY.DOWN,R0
-                BEQ @@15
+                CMPI #BAS_CR,R0         ; Carriage return?
+                BEQ @@5                 ; Yes, jump.
+                CMPI #BAS_LF,R0         ; Line feed?
+                BEQ @@3                 ; Yes, jump.
+                CMPI #KEY.LEFT,R0       ; Moving to left?
+                BEQ @@7                 ; Yes, jump.
+                CMPI #KEY.RIGHT,R0      ; Moving to right?
+                BEQ @@10                ; Yes, jump.
+                CMPI #KEY.UP,R0         ; Moving up?
+                BEQ @@12                ; Yes, jump.
+                CMPI #KEY.DOWN,R0       ; Moving down?
+                BEQ @@15                ; Yes, jump.
 @@0:
                 ;
                 ; Normal letter
@@ -5431,6 +5432,9 @@ SCAN_KBD:       PROC
                 JR R5
                 ENDP
 
+                ;
+                ; Print an integer.
+                ;
 PRNUM16:        PROC
 @@l:            PSHR R5
                 CLRR R2
@@ -5447,6 +5451,9 @@ PRNUM16:        PROC
                 CALL @@d
                 PULR PC
 
+                ;
+                ; Print an integer digit.
+                ;
 @@d:            PSHR R5
                 MVII #$2F,R3
 @@1:            INCR R3
@@ -5468,6 +5475,9 @@ PRNUM16:        PROC
 
                 ENDP
 
+                ;
+                ; Set the interrupt service routine.
+                ;
 _set_isr:       PROC
                 MVI@ R5,R0
                 MVO R0,ISRVEC
