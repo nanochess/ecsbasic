@@ -1334,15 +1334,15 @@ bas_generic_list: PROC
                 BEQ @@14
                 CMPI #TOKEN_START,R0    ; Is it a token?
                 BC @@16                 ; Yes, jump.
-                CMPI #$2B,R0
+                CMPI #$2B,R0            ; +
                 BEQ @@17
-                CMPI #$2D,R0
+                CMPI #$2D,R0            ; -
                 BEQ @@17
-                CMPI #$2A,R0
+                CMPI #$2A,R0            ; *
                 BEQ @@17
-                CMPI #$2F,R0
+                CMPI #$2F,R0            ; /
                 BEQ @@17
-                CMPI #$5E,R0
+                CMPI #$5E,R0            ; ^
                 BEQ @@17
                 MVII #COLOR_TEXT,R1
                 B @@18
@@ -1788,8 +1788,8 @@ bas_check_esc:  PROC
                 CALL SCAN_KBD           ; Explore the keyboard.
                 PULR R5
                 PULR R4
-                CMPI #KEY.ESC,R0
-                BNE @@1
+                CMPI #KEY.ESC,R0        ; Esc key pressed?
+                BNE @@1                 ; No, jump.
                 MVII #ERR_STOP,R0
                 CALL bas_error
 @@1:            MOVR R5,PC
@@ -3366,7 +3366,7 @@ bas_filename:   PROC
                 INCR R3
                 B @@2
 
-                ; Copy the filename here.
+                ; Copy the filename in the ECS RAM.
                 ; The jzintv emulator uses it to create files in the main directory.
 @@3:            MVII #_filename,R4
                 MVII #$4080,R1
@@ -3554,7 +3554,7 @@ bas_expr:       PROC
                 MOVR R3,R1
                 CALL fp2int
                 PULR R1
-                COMR R1
+                COMR R1                 ; Does OR operation.
                 ANDR R1,R0
                 COMR R1
                 ADDR R1,R0
@@ -3585,7 +3585,7 @@ bas_expr1:      PROC
                 MOVR R3,R1
                 CALL fp2int
                 PULR R1
-                XORR R1,R0
+                XORR R1,R0              ; Does XOR operation.
                 CALL fpfromint
                 MOVR R0,R2
                 MOVR R1,R3
@@ -3613,7 +3613,7 @@ bas_expr2:      PROC
                 MOVR R3,R1
                 CALL fp2int
                 PULR R1
-                ANDR R1,R0
+                ANDR R1,R0              ; Does AND operation.
                 CALL fpfromint
                 MOVR R0,R2
                 MOVR R1,R3
@@ -3630,7 +3630,7 @@ bas_expr2:      PROC
 bas_expr3:      PROC
                 PSHR R5
                 CALL bas_expr4
-                BC @@7
+                BC @@7                  ; Jump if expression is string.
                 macro_get_next
                 CMPI #TOKEN_LE,R0
                 BNC @@1
@@ -3796,12 +3796,12 @@ bas_expr3:      PROC
 bas_expr4:      PROC
                 PSHR R5
                 CALL bas_expr5
-                BC @@3
+                BC @@3                  ; Jump if it is string.
 @@0:
                 macro_get_next
-                CMPI #$2b,R0
+                CMPI #$2b,R0            ; +
                 BEQ @@1
-                CMPI #$2d,R0
+                CMPI #$2d,R0            ; -
                 BNE @@2
 
                 PSHR R2
@@ -3836,16 +3836,16 @@ bas_expr4:      PROC
                 PULR PC
 
 @@3:            macro_get_next
-                CMPI #$2b,R0
+                CMPI #$2b,R0            ; +
                 BNE @@4
                 PSHR R2
                 PSHR R3
                 CALL bas_expr5
-                BNC bas_type_err
+                BNC bas_type_err        ; Jump if expression is numeric.
                 PULR R1
                 PULR R0
                 PSHR R4
-                CALL string_concat
+                CALL string_concat      ; Concatenate strings.
                 PULR R4
                 B @@3
 
@@ -3860,14 +3860,14 @@ bas_expr4:      PROC
 bas_expr5:      PROC
                 PSHR R5
                 CALL bas_expr6
-                BC @@3
+                BC @@3                  ; Jump if it is string.
 @@0:
                 macro_get_next
-                CMPI #$2a,R0
+                CMPI #$2a,R0            ; *
                 BEQ @@1
-                CMPI #$2f,R0
+                CMPI #$2f,R0            ; /
                 BEQ @@2
-                CMPI #$5e,R0
+                CMPI #$5e,R0            ; ^
                 BNE @@4
                 PSHR R2
                 PSHR R3
@@ -3876,7 +3876,7 @@ bas_expr5:      PROC
                 PULR R1
                 PULR R0
                 PSHR R4
-                CALL fppow
+                CALL fppow              ; Power-of operator.
                 MOVR R0,R2
                 MOVR R1,R3
                 PULR R4
@@ -3890,7 +3890,7 @@ bas_expr5:      PROC
                 PULR R1
                 PULR R0
                 PSHR R4
-                CALL fpmul
+                CALL fpmul              ; Multiplication.
                 MOVR R0,R2
                 MOVR R1,R3
                 PULR R4
@@ -3904,7 +3904,7 @@ bas_expr5:      PROC
                 PULR R1
                 PULR R0
                 PSHR R4
-                CALL fpdiv
+                CALL fpdiv              ; Division.
                 MOVR R0,R2
                 MOVR R1,R3
                 PULR R4
@@ -3959,12 +3959,12 @@ bas_expr6:      PROC
 bas_expr_paren: PROC
                 PSHR R5
                 macro_get_next
-                CMPI #$28,R0
+                CMPI #$28,R0            ; Left parenthesis?
                 BNE @@1
                 CALL bas_expr
                 GSWD R1                 ; Save carry flag.
                 macro_get_next
-                CMPI #$29,R0
+                CMPI #$29,R0            ; Right parenthesis?
                 BNE @@1
                 RSWD R1
                 MOVR R2,R0
@@ -4043,28 +4043,28 @@ bas_expr7:      PROC
                 CLRC
                 PULR PC
 
-                ; INT(x)
+                ; INT(x) Get integer value.
 @@INT:
                 CALL bas_expr_paren
                 BC bas_type_err
                 CALL fpint
                 B @@generic_copy
 
-                ; SGN(x)
+                ; SGN(x) Get sign of value.
 @@SGN:
                 CALL bas_expr_paren
                 BC bas_type_err
                 CALL fpsgn
                 B @@generic_copy
 
-                ; ABS(x)
+                ; ABS(x) Get absolute value.
 @@ABS:
                 CALL bas_expr_paren
                 BC bas_type_err
                 CALL fpabs
                 B @@generic_copy
 
-                ; SIN(x)
+                ; SIN(x) Sine function.
 @@SIN:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4073,7 +4073,7 @@ bas_expr7:      PROC
                 PULR R4
                 B @@generic_copy
 
-                ; COS(x)
+                ; COS(x) Cosine function.
 @@COS:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4082,7 +4082,7 @@ bas_expr7:      PROC
                 PULR R4
                 B @@generic_copy
 
-                ; TAN(x)
+                ; TAN(x) Tangent function.
 @@TAN:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4091,7 +4091,7 @@ bas_expr7:      PROC
                 PULR R4
                 B @@generic_copy
 
-                ; LOG(x)
+                ; LOG(x) Natural logarithm function.
 @@LOG:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4100,7 +4100,7 @@ bas_expr7:      PROC
                 PULR R4
                 B @@generic_copy
 
-                ; EXP(x)
+                ; EXP(x) Exponent function.
 @@EXP:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4109,7 +4109,7 @@ bas_expr7:      PROC
                 PULR R4
                 B @@generic_copy
 
-                ; SQR(x)
+                ; SQR(x) Square-root function.
 @@SQR:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4118,7 +4118,7 @@ bas_expr7:      PROC
                 PULR R4
                 B @@generic_copy
 
-                ; ATN(x)
+                ; ATN(x) Arc-tangent function.
 @@ATN:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4127,14 +4127,14 @@ bas_expr7:      PROC
                 PULR R4
                 B @@generic_copy
 
-                ; TIMER
+                ; TIMER Timer value.
 @@TIMER:
                 MVI _frame+1,R0
                 MVI _frame,R1
                 CALL fpfromuint24
                 B @@generic_copy
 
-                ; FRE(x)
+                ; FRE(x) Free memory available.
 @@FRE:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4145,7 +4145,7 @@ bas_expr7:      PROC
                 CALL fpfromint
                 B @@generic_copy
 
-                ; POS(x)
+                ; POS(x) Cursor column on the screen.
 @@POS:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4155,7 +4155,7 @@ bas_expr7:      PROC
                 CALL fpfromint
                 B @@generic_copy
 
-                ; LPOS(x)
+                ; LPOS(x) Cursor column on the printer.
 @@LPOS:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4165,17 +4165,17 @@ bas_expr7:      PROC
                 CALL fpfromint
                 B @@generic_copy
 
-                ; POINT(x,y)
+                ; POINT(x,y) Pixel value at x,y
 @@POINT:
                 macro_get_next
                 CMPI #$28,R0
                 BNE @@2
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get X-coordinate.
                 PSHR R0
                 macro_get_next
                 CMPI #$2C,R0
                 BNE @@2
-                CALL bas_expr_int
+                CALL bas_expr_int       ; Get Y-coordinate.
                 PSHR R0
                 macro_get_next
                 CMPI #$29,R0
@@ -4240,7 +4240,7 @@ bas_expr7:      PROC
                 CLRC
                 PULR PC
 
-                ; HEX$(expr)
+                ; HEX$(expr) Get hexadecimal value as string.
 @@HEX:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4282,6 +4282,9 @@ bas_expr7:      PROC
                 SLR R0,2
                 MOVR R5,PC
 
+                ;
+                ; STICK(n) Get disc direction for controller.
+                ;
 @@STICK:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4318,6 +4321,9 @@ bas_expr7:      PROC
                 DECLE 0,10,6,7,2,0,3,0
                 DECLE 14,11,0,0,15,0,0,0
 
+                ;
+                ; STRIG(n) Get side-button pressed for controller.
+                ;
 @@STRIG:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4347,6 +4353,10 @@ bas_expr7:      PROC
                 MOVR R1,R3
                 CLRC
                 PULR PC
+
+                ;
+                ; KEY(n) Get pressed key for controller.
+                ;
 @@KEY:
                 CALL bas_expr_paren
                 BC bas_type_err
@@ -4458,7 +4468,7 @@ bas_expr7:      PROC
                 SETC
                 PULR PC
 
-                ; LEFT$(val,l)
+                ; LEFT$(val,l) Get left side of a string.
 @@LEFT:
                 macro_get_next
                 CMPI #$28,R0
@@ -4483,7 +4493,7 @@ bas_expr7:      PROC
                 PULR R3
                 B @@strcommon
 
-                ; MID$(val,p) or MID$(val,p,l)
+                ; MID$(val,p) or MID$(val,p,l) Get middle part of a string.
 @@MID:
                 macro_get_next
                 CMPI #$28,R0
@@ -4550,7 +4560,7 @@ bas_expr7:      PROC
                 SETC                    ; String.
                 PULR PC
 
-                ; RIGHT$(val,l)
+                ; RIGHT$(val,l) Get right part of a string.
 @@RIGHT:
                 macro_get_next
                 CMPI #$28,R0
@@ -4579,7 +4589,7 @@ bas_expr7:      PROC
                 PULR R0
                 B @@strcommon
 
-                ; VAL(str)
+                ; VAL(str) Get numeric value of string.
 @@VAL:          CALL bas_expr_paren
                 BNC bas_type_err
                 PSHR R4
@@ -4603,7 +4613,7 @@ bas_expr7:      PROC
                 CLRC
                 PULR PC
 
-                ; INKEY$
+                ; INKEY$ Read pressed key as string.
 @@INKEY:
                 PSHR R4
                 CALL SCAN_KBD           ; Explore the keyboard.
@@ -4618,7 +4628,7 @@ bas_expr7:      PROC
                 SETC
                 PULR PC
 
-                ; STR$
+                ; STR$(expr) Convert expression to number in string.
 @@STR:          CALL bas_expr_paren
                 BC bas_type_err
                 PSHR R4
@@ -4647,8 +4657,8 @@ bas_expr7:      PROC
                 MVO@ R0,R1
                 MOVR R5,PC
 
-                ; INSTR(A$,B$)
-                ; INSTR(expr,A$,B$)
+                ; INSTR(A$,B$) Search B$ in A$
+                ; INSTR(expr,A$,B$) Search B$ in A$ starting at pos.
 @@INSTR:
                 macro_get_next
                 CMPI #$28,R0
