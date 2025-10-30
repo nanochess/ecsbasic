@@ -5717,6 +5717,7 @@ temp1:          RMB 1                   ; Temporary value.
 _filename:      RMB 4                   ; File name.
 _printer_col:   RMB 1                   ; Printer column.
 _check_esc:     RMB 1                   ; For checking Esc key.
+_fraction:      RMB 1                   ; For floating-point fraction display.
 
                 ; Enable JLP RAM on real hardware. Nice for LTO-Flash.
                 ;	CFGVAR "jlp" = 1
