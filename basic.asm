@@ -1,4 +1,5 @@
                 ;
+                ;
                 ; ECS Extended BASIC interpreter for Intellivision
                 ;
                 ; by Oscar Toledo G.
@@ -58,7 +59,8 @@
                 ;                             Solved bug in get_next_point when ELSE followed.
                 ; Revision date: Oct/30/2025. Added COL0-COL7 to access collision registers.
                 ;                             Speed up of constant integer expression handling.
-                ;                             The text editor is now full-screen.
+                ;                             The text editor is now full-screen. Tokenized
+                ;                             buffer is now 80 words (3 to 4 screen rows).
                 ;
 
                 ;
@@ -82,13 +84,18 @@
                 ;
                 ; The area $8000-$803f is reserved because STIC mirroring.
                 ;
+memory_start:   EQU $8040
 
-basic_buffer:   EQU $8040               ; Tokenized buffer.
-basic_buffer_end: EQU $807F
-variables:      EQU $8080               ; A-Z
-strings:        EQU $80B4               ; A$-Z$
-program_start:  EQU $80D0
+                ;
+                ; The area $9f00-$9fff is reserved because LTO-Flash registers.
+                ;
 memory_limit:   EQU $9F00
+
+basic_buffer:   EQU memory_start        ; Tokenized buffer.
+basic_bufend:   EQU memory_start+79
+variables:      EQU memory_start+80     ; A-Z
+strings:        EQU memory_start+132    ; A$-Z$
+program_start:  EQU memory_start+160
 
 start_for:      EQU memory_limit-64
 end_for:        EQU memory_limit
@@ -756,7 +763,7 @@ bas_get_line:   PROC
                 PULR R4
                 B @@2
 
-@@3:            CMPI #basic_buffer_end,R4; Reached buffer limit?
+@@3:            CMPI #basic_bufend,R4   ; Reached buffer limit?
                 BEQ @@2                 ; Yes, don't put anything more.
                 MVO@ R0,R4              ; Put into the buffer.
                 PSHR R4
@@ -1003,7 +1010,7 @@ bas_tokenize:   PROC
                 ; Start tokenizing
 @@4:            CMPI #$22,R0            ; Quotes?
                 BNE @@14
-@@15:           CMPI #basic_buffer_end,R3
+@@15:           CMPI #basic_bufend,R3
                 BC @@21
                 MVO@ R0,R3              ; Pass along string.
                 INCR R3
@@ -1012,7 +1019,7 @@ bas_tokenize:   PROC
                 CALL bas_read_card
                 CMPI #$22,R0
                 BNE @@15
-                CMPI #basic_buffer_end,R3
+                CMPI #basic_bufend,R3
                 BC @@21
                 MVO@ R0,R3
                 INCR R3
@@ -1029,7 +1036,7 @@ bas_tokenize:   PROC
                 CALL fptokenparse       ; Parse a floating-point number.
                 PULR R3
                 BNC @@24                ; Jump if integer found.
-                CMPI #basic_buffer_end-4,R3
+                CMPI #basic_bufend-4,R3
                 BC @@21
                 MVII #TOKEN_NUMBER,R2   ; Store tokenized floating-point number.
                 MVO@ R2,R3
@@ -1052,7 +1059,7 @@ bas_tokenize:   PROC
                 INCR R3
                 B @@16
 @@24:
-                CMPI #basic_buffer_end-2,R3
+                CMPI #basic_bufend-2,R3
                 BC @@21
                 MVII #TOKEN_INTEGER,R2  ; Store tokenized integer.
                 MVO@ R2,R3
@@ -1090,7 +1097,7 @@ bas_tokenize:   PROC
                 MVI@ R2,R0
                 TSTR R0                 ; End of token?
                 BNE @@11
-                CMPI #basic_buffer_end,R3
+                CMPI #basic_bufend,R3
                 BEQ @@21
                 MVO@ R5,R3              ; Write token.
                 INCR R3
@@ -1102,7 +1109,7 @@ bas_tokenize:   PROC
                 CMP bas_tokenlimit,R4
                 BEQ @@5
                 CALL bas_read_card
-                CMPI #basic_buffer_end,R3
+                CMPI #basic_bufend,R3
                 BEQ @@21
                 MVO@ R0,R3
                 INCR R3
@@ -1126,7 +1133,7 @@ bas_tokenize:   PROC
                 BC @@18
                 SUBI #$20,R0
 @@18:
-                CMPI #basic_buffer_end,R3
+                CMPI #basic_bufend,R3
                 BEQ @@21
                 MVO@ R0,R3
                 INCR R3
@@ -1581,6 +1588,7 @@ bas_cls:        PROC
                 PSHR R4
                 MVII #BACKTAB,R4        ; Pointer to the screen.
                 MVO R4,bas_ttypos
+                MVO R4,bas_cursorhigh
                 MVI bas_curcolor,R0
                 MVII #$00F0,R1
                 CALL MEMSET
