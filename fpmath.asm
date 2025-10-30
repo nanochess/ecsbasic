@@ -11,6 +11,7 @@
 
                 ; These routines are based on the mathematic routines
                 ; I made for my Pascal compiler for transputer.
+                ; https://nanochess.org/pascal.html
 
                 ;
                 ; sin function

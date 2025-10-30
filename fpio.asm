@@ -125,7 +125,7 @@ fpprint:        PROC
                 BNE @@4
                 ; Rounding.
 @@3:            MVII #_fraction,R3
-                ; Make space for a decimal digit (make it 4.28)
+                ; Make space for a decimal digit (make it 4.28 format)
                 CLRC
                 RRC R0,1
                 RRC R1,1
@@ -173,6 +173,17 @@ fpprint:        PROC
                 ;
 @@19:           CMPI #$35,R2            ; >5 ?
                 BNC @@20                ; No, jump.
+                MOVR R3,R1
+@@25:           CMPI #_fraction,R1      ; Turned 9999999 into 0, avoid it.
+                BEQ @@20
+                DECR R1
+                MVI@ R1,R2
+                INCR R2
+                CMPI #$3A,R2
+                BEQ @@25
+                ;
+                ; Ok, it didn't spill to integer, do the real rounding now.
+                ;
                 MOVR R3,R1
 @@23:           CMPI #_fraction,R1
                 BEQ @@20
