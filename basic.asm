@@ -58,6 +58,7 @@
                 ;                             Solved bug in get_next_point when ELSE followed.
                 ; Revision date: Oct/30/2025. Added COL0-COL7 to access collision registers.
                 ;                             Speed up of constant integer expression handling.
+                ;                             The text editor is now full-screen.
                 ;
 
                 ;
@@ -180,6 +181,7 @@ BAS_CR:         EQU $0d                 ; Carriage Return.
 BAS_LF:         EQU $0a                 ; Line Feed.
 BAS_BS:         EQU $1C                 ; Same as KEY.LEFT
 
+BACKTAB:        equ $0200               ; Base of the screen.
 STACK:          equ $02f0               ; Base stack pointer.
 
                 ;
@@ -383,8 +385,7 @@ basic_restart:
                 MVII #BAS_LF,R0
                 CALL bas_output
 
-                MVI bas_ttypos,R0
-                MVO R0,bas_firstpos
+                CALL bas_mark_line
 
                 ; Build an example program
                 IF 0
@@ -415,9 +416,9 @@ main_loop:
                 CALL bas_restore_cursor ; Restore the content under the cursor.
                 CMPI #KEY.ENTER,R0      ; Pressed Enter/Return?
                 BNE @@1                 ; No, jump.
-                CALL bas_output_newline
-                MVI bas_firstpos,R4
+                CALL bas_line_start
                 CALL bas_tokenize
+                CALL bas_output_newline
                 MVI basic_buffer+0,R0
                 TSTR R0                 ; Line number found?
                 BNE @@2                 ; Yes, jump.
@@ -447,11 +448,15 @@ main_loop:
                 CALL line_insert        ; Insert new line.
                 CALL restart_pointers   ; Restart execution pointers.
 @@3:
-                MVI bas_ttypos,R0
-                MVO R0,bas_firstpos
+                CALL bas_mark_line
                 B main_loop
 @@1:
                 CALL bas_output         ; Output the typed key.
+                MVI bas_ttypos,R0
+                ANDI #$00FF,R0
+                CMP bas_cursorhigh,R0
+                BNC main_loop           ; Repeat the loop.
+                MVO R0,bas_cursorhigh   ; New highest position for the cursor.
                 B main_loop             ; Repeat the loop.
 
                 ;
@@ -959,7 +964,7 @@ bas_tokenize:   PROC
 
                 MVII #basic_buffer,R3
                 CLRR R2                 ; Line number.
-@@1:            CMP bas_ttypos,R4       ; Reached the cursor.
+@@1:            CMP bas_tokenlimit,R4   ; Reached the cursor.
                 BEQ @@0
                 CALL bas_read_card
                 CMPI #$20,R0            ; Space character?
@@ -978,7 +983,7 @@ bas_tokenize:   PROC
                 ADDR R1,R2              ; x5
                 ADDR R2,R2              ; x10
                 ADDR R0,R2              ; Add number.
-                CMP bas_ttypos,R4
+                CMP bas_tokenlimit,R4
                 BEQ @@19
                 CALL bas_read_card
                 B @@2
@@ -990,7 +995,7 @@ bas_tokenize:   PROC
                 CMPI #$20,R0            ; Space character?
                 BNE @@4
 @@6:
-                CMP bas_ttypos,R4
+                CMP bas_tokenlimit,R4
                 BEQ @@5
                 CALL bas_read_card
                 CMPI #$20,R0            ; Is it space?
@@ -1002,7 +1007,7 @@ bas_tokenize:   PROC
                 BC @@21
                 MVO@ R0,R3              ; Pass along string.
                 INCR R3
-                CMP bas_ttypos,R4
+                CMP bas_tokenlimit,R4
                 BEQ @@5
                 CALL bas_read_card
                 CMPI #$22,R0
@@ -1094,7 +1099,7 @@ bas_tokenize:   PROC
                 BNE @@16
                 ; Literal copy after REM
 @@27:
-                CMP bas_ttypos,R4
+                CMP bas_tokenlimit,R4
                 BEQ @@5
                 CALL bas_read_card
                 CMPI #basic_buffer_end,R3
@@ -1126,7 +1131,7 @@ bas_tokenize:   PROC
                 MVO@ R0,R3
                 INCR R3
 @@16:
-                CMP bas_ttypos,R4
+                CMP bas_tokenlimit,R4
                 BEQ @@5
                 CALL bas_read_card
                 B @@4
@@ -1284,6 +1289,92 @@ bas_llist:      PROC
                 ENDP
 
                 ;
+                ; Get the initial screen line for tokenization,
+                ; and also the final position.
+                ;
+                ; Puts the cursor in a good position for a newline.
+                ;
+bas_line_start: PROC
+                PSHR R5
+                MVI bas_ttypos,R1       ; Current cursor position.
+                ANDI #$00FF,R1
+                MVII #_linemark,R2
+@@1:            INCR R2
+                SUBI #20,R1
+                BC @@1
+                ;
+                ; Search backwards for line start.
+                ;
+@@2:            DECR R2
+                MVI@ R2,R1
+                TSTR R1
+                BNE @@3
+                CMPI #_linemark,R2
+                BNE @@2
+@@3:
+                ;
+                ; Search forward for line end.
+                ;
+                PSHR R2
+@@5:            INCR R2
+                CMPI #_linemark+12,R2
+                BEQ @@4
+                MVI@ R2,R1
+                TSTR R1
+                BEQ @@5
+                B @@7
+
+                ;
+                ; Exceeded the bottom of the screen. Use the
+                ; highest cursor position.
+                ;
+@@4:            MVI bas_cursorhigh,R2
+                ADDI #BACKTAB,R2
+                MVO R2,bas_ttypos
+                MVO R2,bas_tokenlimit
+                B @@6
+
+@@7:            SUBI #_linemark,R2
+                MOVR R2,R1
+                SLL R2,2                ; x4
+                ADDR R1,R2              ; x5
+                SLL R2,2                ; x20
+                MVII #BACKTAB,R4
+                ADDR R2,R4
+                MVO R4,bas_tokenlimit
+                DECR R4
+                MVO R4,bas_ttypos
+@@6:            PULR R2
+                SUBI #_linemark,R2
+                MOVR R2,R1
+                SLL R2,2                ; x4
+                ADDR R1,R2              ; x5
+                SLL R2,2                ; x20
+                MVII #BACKTAB,R4
+                ADDR R2,R4
+                PULR PC
+                ENDP
+
+                ;
+                ; Mark the current line as code.
+                ;
+bas_mark_line:  PROC
+                MVI bas_ttypos,R1
+                ANDI #$00FF,R1
+                CMP bas_cursorhigh,R1
+                BNC @@2
+                MVO R1,bas_cursorhigh
+@@2:
+                MVII #_linemark-1,R2
+@@1:            INCR R2
+                SUBI #20,R1
+                BC @@1
+                MVII #1,R1
+                MVO@ R1,R2
+                MOVR R5,PC
+                ENDP
+
+                ;
                 ; List the program.
                 ;
 bas_generic_list: PROC
@@ -1331,6 +1422,11 @@ bas_generic_list: PROC
                 PSHR R4
                 MVII #COLOR_TEXT,R1
                 MVO R1,bas_curcolor
+                MVI bas_func,R1
+                CMPI #bas_output,R1
+                BNE @@21
+                CALL bas_mark_line
+@@21:
                 CALL PRNUM16.l          ; Print line number.
                 MVII #$20,R0            ; Space.
                 CALL indirect_output
@@ -1483,10 +1579,14 @@ bas_new:        PROC
 bas_cls:        PROC
                 PSHR R5
                 PSHR R4
-                MVII #$0200,R4          ; Pointer to the screen.
+                MVII #BACKTAB,R4        ; Pointer to the screen.
                 MVO R4,bas_ttypos
                 MVI bas_curcolor,R0
                 MVII #$00F0,R1
+                CALL MEMSET
+                MVII #_linemark,R4      ; Reset lines mark.
+                CLRR R0
+                MVII #$000C,R1
                 CALL MEMSET
                 PULR R4
                 PULR PC
@@ -1588,7 +1688,7 @@ bas_generic_print: PROC
                 CALL bas_expr_int       ; Get integer.
                 CMPI #240,R0            ; Exceeds screen?
                 BC @@10                 ; Yes, jump.
-                ADDI #$0200,R0
+                ADDI #BACKTAB,R0
                 MVO R0,bas_ttypos       ; Set up as new cursor position.
                 macro_get_next          ; Check for end of statement.
                 CMPI #TOKEN_COLON,R0
@@ -3282,7 +3382,7 @@ draw_pixel:     PROC
                 SLL R3,2                ; x4
                 ADDR R5,R3              ; x5
                 SLL R3,2                ; x20
-                ADDI #$0200,R3          ; For the backtab
+                ADDI #BACKTAB,R3        ; For the backtab
                 MOVR R3,R5
                 MOVR R0,R3
                 SLR R3,1
@@ -3349,7 +3449,7 @@ bas_bk:         PROC
                 BNE @@2
                 CALL bas_expr_int       ; Get card.
                 PULR R5
-                ADDI #$0200,R5
+                ADDI #BACKTAB,R5
                 MVO@ R0,R5              ; Put into the screen.
                 PULR PC
 
@@ -4272,7 +4372,7 @@ bas_expr7:      PROC
                 SLL R3,2                ; x4
                 ADDR R5,R3              ; x5
                 SLL R3,2                ; x20
-                ADDI #$0200,R3          ; For the backtab
+                ADDI #BACKTAB,R3        ; For the backtab
                 MOVR R3,R5
                 MOVR R0,R3
                 SLR R3,1
@@ -4496,7 +4596,7 @@ bas_expr7:      PROC
                 CMPI #240,R0
                 BC @@3
                 MOVR R0,R1
-                ADDI #$0200,R1
+                ADDI #BACKTAB,R1
                 MVI@ R1,R0
                 CALL fpfromint
                 MOVR R0,R2
@@ -5252,7 +5352,7 @@ bas_output:     PROC
                 CMPI #$FFFF,R0          ; Get horizontal position.
                 BNE @@19
                 MVI bas_ttypos,R0
-                SUBI #$0200,R0
+                ANDI #$00FF,R0
 @@20:           SUBI #20,R0
                 BC @@20
                 ADDI #20,R0
@@ -5298,8 +5398,8 @@ bas_output:     PROC
                 ; Carriage return.
                 ;
 @@5:            MVI bas_ttypos,R4
-                SUBI #$0200,R4
-                MVII #$01EC,R0
+                ANDI #$00FF,R4
+                MVII #BACKTAB-20,R0
 @@6:            ADDI #20,R0
                 SUBI #20,R4
                 BC @@6
@@ -5324,7 +5424,7 @@ bas_output:     PROC
                 ; Move left.
                 ;
 @@7:            MVI bas_ttypos,R4
-                CMPI #$0200,R4
+                CMPI #BACKTAB,R4
                 BEQ @@8
                 DECR R4
 @@8:            MVO R4,bas_ttypos
@@ -5334,7 +5434,7 @@ bas_output:     PROC
                 ; Move right.
                 ;
 @@10:           MVI bas_ttypos,R4
-                CMPI #$02EF,R4
+                CMPI #BACKTAB+239,R4
                 BEQ @@11
                 INCR R4
 @@11:           MVO R4,bas_ttypos
@@ -5344,7 +5444,7 @@ bas_output:     PROC
                 ; Move upward.
                 ;
 @@12:           MVI bas_ttypos,R4
-                CMPI #$0214,R4
+                CMPI #BACKTAB+20,R4
                 BNC @@14
                 SUBI #20,R4
 @@14:           MVO R4,bas_ttypos
@@ -5354,7 +5454,7 @@ bas_output:     PROC
                 ; Move downward.
                 ;
 @@15:           MVI bas_ttypos,R4
-                CMPI #$02DC,R4
+                CMPI #BACKTAB+220,R4
                 BC @@16
                 ADDI #20,R4
 @@16:           MVO R4,bas_ttypos
@@ -5365,8 +5465,27 @@ bas_output:     PROC
                 ;
 @@scroll:
                 PSHR R5
-                MVII #$0214,R4
-                MVII #$0200,R5
+                ;
+                ; Move marked lines.
+                ;
+                MVII #_linemark+1,R4
+                MVII #_linemark,R5
+                MVII #11,R2
+@@17:           MVI@ R4,R0
+                MVO@ R0,R5
+                DECR R2
+                BNE @@17
+                CLRR R0
+                MVO@ R0,R5
+
+                MVI bas_cursorhigh,R4
+                SUBI #20,R4
+                MVO R4,bas_cursorhigh
+                ;
+                ; Move the whole screen.
+                ;
+                MVII #BACKTAB+20,R4
+                MVII #BACKTAB,R5
                 MVII #$00DC/4,R2
 @@2:            MVI@ R4,R0
                 MVO@ R0,R5
@@ -5378,19 +5497,15 @@ bas_output:     PROC
                 MVO@ R0,R5
                 DECR R2
                 BNE @@2
-                ; Clear the bottom row.
+                ;
+                ; Clear the bottom row of the screen.
+                ;
                 MVI bas_curcolor,R0
                 MVII #$0014/2,R2
 @@9:            MVO@ R0,R5
                 MVO@ R0,R5
                 DECR R2
                 BNE @@9
-                MVI bas_firstpos,R0
-                CMPI #$0214,R0
-                BNC @@17
-                SUBI #20,R0
-                MVO R0,bas_firstpos
-@@17:
                 PULR PC
 
                 ENDP
@@ -5763,8 +5878,8 @@ _col5:          RMB 1                   ; Collision status for MOB5
 _col6:          RMB 1                   ; Collision status for MOB6
 _col7:          RMB 1                   ; Collision status for MOB7
 _mobs:          RMB 24                  ; Data for sprites.
-bas_firstpos:   RMB 1                   ; First position of cursor.
 bas_ttypos:     RMB 1                   ; Current position on screen.
+bas_tokenlimit: RMB 1                   ; Limit for tokenization.
 bas_curcolor:   RMB 1                   ; Current color.
 bas_card:       RMB 1                   ; Card under the cursor.
 bas_curline:    RMB 1                   ; Current line in execution (0 for direct command)
@@ -5811,7 +5926,9 @@ temp1:          RMB 1                   ; Temporary value.
 _filename:      RMB 4                   ; File name.
 _printer_col:   RMB 1                   ; Printer column.
 _check_esc:     RMB 1                   ; For checking Esc key.
-_fraction:      RMB 1                   ; For floating-point fraction display.
+_fraction:      RMB 7                   ; For floating-point fraction display.
+_linemark:      RMB 12                  ; Screen lines starting a BASIC line.
+bas_cursorhigh: RMB 1                   ; Highest-position of cursor.
 
                 ; Enable JLP RAM on real hardware. Nice for LTO-Flash.
                 ;	CFGVAR "jlp" = 1

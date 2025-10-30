@@ -174,6 +174,8 @@ String support allows comparison between strings, string concatenation, and asso
 
 If you get an error, you can do debugging of the program by using PRINT to see the variables, and using GOTO to re-enter a program. RUN resets all variables.
 
+The editor is full-screen, this means you can move the cursor up to the line you want to correct or edit, and type over it, and press Return to change it. Or in other words, you don't need to retype a BASIC line, just LIST it, edit it, and press Return.
+
 Given the slow speed of the CP1610 processor, the interpreter doesn't allow expressions for the target line of GOTO and GOSUB statements.
 
 ![image](shot0004.gif)
