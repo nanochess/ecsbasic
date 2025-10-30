@@ -78,6 +78,9 @@ cassette_record: PROC
                 PULR PC
                 ENDP
 
+                ;
+                ; Stop the cassette motor.
+                ;
 cassette_stop:  PROC
                 PSHR R5
                 MVII #60,R1
@@ -99,12 +102,15 @@ cassette_stop:  PROC
                 ; Save a file.
                 ;
                 ; Input:
-                ;   _filename contains the filename (eight bytes).
+                ;   _filename contains the filename (four bytes).
                 ;
 cassette_save:  PROC
                 PSHR R5
                 CALL cassette_record
 
+                ;
+                ; Writes the eight header bytes spaced by six video frames.
+                ;
                 MVII #8,R2
 @@1:            MVII #CAS_HEADER_BYTE,R0
                 CALL cassette_write
@@ -117,9 +123,15 @@ cassette_save:  PROC
                 DECR R2
                 BNE @@1
 
+                ;
+                ; Record a marker.
+                ;
                 MVII #$00,R0
                 CALL cassette_write
 
+                ;
+                ; Record the filename.
+                ;
                 MVII #_filename,R4
                 MVII #4,R2
 @@2:            MVI@ R4,R0
@@ -127,6 +139,9 @@ cassette_save:  PROC
                 DECR R2
                 BNE @@2
 
+                ;
+                ; Record a end-of-header marker.
+                ;
                 CLRR R0
                 CALL cassette_write
 
@@ -137,7 +152,7 @@ cassette_save:  PROC
                 ; Load a file.
                 ;
                 ; Input:
-                ;   _filename contains the filename (eight bytes).
+                ;   _filename contains the filename (four bytes).
                 ;
                 ; Output:
                 ;   0 = File found.
@@ -202,6 +217,10 @@ cassette_find_leader: PROC
 @@0:            PULR PC
                 ENDP
 
+                ;
+                ; Read a word from the cassette.
+                ; Used for line numbers and token lengths.
+                ;
 cassette_read_word: PROC
                 PSHR R5
                 CALL cassette_read
@@ -212,6 +231,9 @@ cassette_read_word: PROC
                 PULR PC
                 ENDP
 
+                ;
+                ; Read a byte from the cassette.
+                ;
 cassette_read:  PROC
                 PSHR R5
 @@0:
@@ -224,6 +246,9 @@ cassette_read:  PROC
                 PULR PC
                 ENDP
 
+                ;
+                ; Read a byte from the cassette with timeout.
+                ;
 cassette_read_timeout: PROC
                 PSHR R5
 @@0:
@@ -243,6 +268,9 @@ cassette_read_timeout: PROC
 
                 ENDP
 
+                ;
+                ; Record a word into the cassette.
+                ;
 cassette_write_word: PROC
                 PSHR R5
                 CALL cassette_write
@@ -252,6 +280,9 @@ cassette_write_word: PROC
                 PULR PC
                 ENDP
 
+                ;
+                ; Record a byte into the cassette.
+                ;
 cassette_write: PROC
                 PSHR R5
 @@0:
@@ -316,9 +347,9 @@ printer_output: PROC
 
                 CMPI #$0A,R0
                 BEQ @@2
-                MVI _printer_col,R1
+                MVI _printer_col,R1     ; Count columns (for LPOS)
                 INCR R1
-                CMPI #40,R1
+                CMPI #40,R1             ; After column 40 goes automatically to column zero.
                 BEQ @@3
                 CMPI #$0D,R0
                 BNE @@1
@@ -330,6 +361,7 @@ printer_output: PROC
 
                 ;
                 ; UART delay.
+                ; Required or the chip blocks itself.
                 ;
 uart_delay:     PROC
                 PSHR R5
