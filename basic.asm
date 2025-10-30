@@ -56,6 +56,17 @@
                 ; Revision date: Oct/18/2025. Solved bug where only the first array could be accessed.
                 ;                             DIM now can define multiple arrays in the same statement.
                 ;                             Solved bug in get_next_point when ELSE followed.
+                ; Revision date: Oct/30/2025. Added COL0-COL7 to access collision registers.
+                ;                             Speed up of constant integer expression handling.
+                ;
+
+                ;
+                ; Latest source tree:
+                ; https://github.com/nanochess/ecsbasic
+                ;
+                ; Full articles about this BASIC interpreter:
+                ; https://nanochess.org/ecs_basic.html
+                ; https://nanochess.org/ecs_basic_2.html
                 ;
 
                 ;
@@ -541,6 +552,14 @@ keywords_exec:
                 DECLE bas_syntax_error  ; SPC
                 DECLE bas_syntax_error  ; TAB
                 DECLE bas_syntax_error  ; AT
+                DECLE bas_syntax_error  ; COL0
+                DECLE bas_syntax_error  ; COL1
+                DECLE bas_syntax_error  ; COL2
+                DECLE bas_syntax_error  ; COL3
+                DECLE bas_syntax_error  ; COL4
+                DECLE bas_syntax_error  ; COL5
+                DECLE bas_syntax_error  ; COL6
+                DECLE bas_syntax_error  ; COL7
 
                 ;
                 ; BASIC keywords.
@@ -653,6 +672,17 @@ keywords:
                 DECLE "SPC",0           ; $5e
                 DECLE "TAB",0           ; $5f
                 DECLE "AT",0            ; $60 Must be after ATN
+                DECLE "COL0",0          ; $61
+
+                DECLE "COL1",0          ; $62
+                DECLE "COL2",0          ; $63
+                DECLE "COL3",0          ; $64
+                DECLE "COL4",0          ; $65
+
+                DECLE "COL5",0          ; $66
+                DECLE "COL6",0          ; $67
+                DECLE "COL7",0          ; $68
+
                 DECLE 0
 
                 ;
@@ -1621,9 +1651,7 @@ bas_generic_print: PROC
 
 @@4:            CMPI #TOKEN_SPC,R0      ; SPC?
                 BNE @@11
-                CALL bas_expr_paren     ; Get expression.
-                BC bas_type_err
-                CALL fp2int             ; Convert to integer.
+                CALL bas_expr_paren_int ; Get integer expression.
 @@12:           CMPI #0,R0
                 BLE @@3
                 PSHR R4
@@ -1637,9 +1665,7 @@ bas_generic_print: PROC
 
 @@11:           CMPI #TOKEN_TAB,R0      ; TAB?
                 BNE @@14
-                CALL bas_expr_paren     ; Get expression.
-                BC bas_type_err
-                CALL fp2int             ; Convert to integer.
+                CALL bas_expr_paren_int ; Get integer expression.
                 PSHR R0
                 MVII #$FFFF,R0
                 CALL indirect_output    ; Get current column.
@@ -3314,8 +3340,7 @@ draw_pixel:     PROC
                 ;
 bas_bk:         PROC
                 PSHR R5
-                CALL bas_expr_paren     ; Get index.
-                CALL fp2int
+                CALL bas_expr_paren_int ; Get integer expression.
                 CMPI #$240,R0
                 BC @@1
                 PSHR R0
@@ -3976,6 +4001,44 @@ bas_expr_paren: PROC
                 ENDP
 
                 ;
+                ; Process integer expression between parenthesis.
+                ;
+bas_expr_paren_int: PROC
+                PSHR R5
+                macro_get_next
+                CMPI #$28,R0            ; Left parenthesis?
+                BNE @@1
+                MOVR R4,R2
+                MVI@ R2,R0
+                CMPI #TOKEN_INTEGER,R0
+                BNE @@2
+                ADDI #3,R2
+                MVI@ R2,R0
+                CMPI #$29,R0
+                BNE @@2
+                MVI@ R4,R0              ; TOKEN_INTEGER
+                MVI@ R4,R0              ; Low byte
+                MVI@ R4,R1              ; High byte
+                SWAP R1
+                ADDR R1,R0
+                MVI@ R4,R1              ; Right parenthesis
+                PULR PC
+
+@@2             CALL bas_expr
+                BC bas_type_err
+                macro_get_next
+                CMPI #$29,R0            ; Right parenthesis?
+                BNE @@1
+                MOVR R2,R0
+                MOVR R3,R1
+                CALL fp2int
+                PULR PC
+
+@@1:            MVII #ERR_SYNTAX,R0
+                CALL bas_error
+                ENDP
+
+                ;
                 ; Process functions, variables, strings, and numbers.
                 ;
 bas_expr7:      PROC
@@ -3984,7 +4047,7 @@ bas_expr7:      PROC
 @@99:
                 CMPI #TOKEN_FUNC,R0
                 BNC @@6
-                CMPI #TOKEN_FUNC+33,R0
+                CMPI #TOKEN_FUNC+47,R0
                 BC @@2                  ; Syntax error.
                 MVII #@@0-TOKEN_FUNC,R1
                 ADDR R0,R1
@@ -4031,6 +4094,23 @@ bas_expr7:      PROC
                 DECLE @@POINT
 
                 DECLE @@HEX
+                DECLE @@2
+                DECLE @@2
+                DECLE @@2
+
+                DECLE @@2
+                DECLE @@2
+                DECLE @@2
+                DECLE @@COL0
+
+                DECLE @@COL1
+                DECLE @@COL2
+                DECLE @@COL3
+                DECLE @@COL4
+
+                DECLE @@COL5
+                DECLE @@COL6
+                DECLE @@COL7
 
                 ; RND
 @@RND:
@@ -4242,12 +4322,8 @@ bas_expr7:      PROC
 
                 ; HEX$(expr) Get hexadecimal value as string.
 @@HEX:
-                CALL bas_expr_paren
-                BC bas_type_err
+                CALL bas_expr_paren_int
                 PSHR R4
-                MOVR R2,R0
-                MOVR R3,R1
-                CALL fp2int
                 MVII #basic_buffer+3,R3
                 CALL @@hexdigit
                 CALL @@hexdigit
@@ -4282,13 +4358,43 @@ bas_expr7:      PROC
                 SLR R0,2
                 MOVR R5,PC
 
+@@COL0:         MVI _col0,R0
+                ANDI #$01FF,R0
+                B @@P2
+
+@@COL1:         MVI _col1,R0
+                ANDI #$01FF,R0
+                B @@P2
+
+@@COL2:         MVI _col2,R0
+                ANDI #$01FF,R0
+                B @@P2
+
+@@COL3:         MVI _col3,R0
+                ANDI #$01FF,R0
+                B @@P2
+
+@@COL4:         MVI _col4,R0
+                ANDI #$01FF,R0
+                B @@P2
+
+@@COL5:         MVI _col5,R0
+                ANDI #$01FF,R0
+                B @@P2
+
+@@COL6:         MVI _col6,R0
+                ANDI #$01FF,R0
+                B @@P2
+
+@@COL7:         MVI _col7,R0
+                ANDI #$01FF,R0
+                B @@P2
+
                 ;
                 ; STICK(n) Get disc direction for controller.
                 ;
 @@STICK:
-                CALL bas_expr_paren
-                BC bas_type_err
-                CALL fp2int
+                CALL bas_expr_paren_int
                 CMPI #2,R0
                 BC @@3
                 MOVR R0,R1
@@ -4325,9 +4431,7 @@ bas_expr7:      PROC
                 ; STRIG(n) Get side-button pressed for controller.
                 ;
 @@STRIG:
-                CALL bas_expr_paren
-                BC bas_type_err
-                CALL fp2int
+                CALL bas_expr_paren_int
                 CMPI #2,R0
                 BC @@3
                 MOVR R0,R1
@@ -4358,9 +4462,7 @@ bas_expr7:      PROC
                 ; KEY(n) Get pressed key for controller.
                 ;
 @@KEY:
-                CALL bas_expr_paren
-                BC bas_type_err
-                CALL fp2int
+                CALL bas_expr_paren_int
                 CMPI #2,R0
                 BC @@3
                 MOVR R0,R1
@@ -4390,9 +4492,7 @@ bas_expr7:      PROC
 
                 ; BK(v) Read screen
 @@BK:
-                CALL bas_expr_paren
-                BC bas_type_err
-                CALL fp2int
+                CALL bas_expr_paren_int
                 CMPI #240,R0
                 BC @@3
                 MOVR R0,R1
@@ -4406,9 +4506,7 @@ bas_expr7:      PROC
 
                 ; PEEK(v) Read memory
 @@PEEK:
-                CALL bas_expr_paren
-                BC bas_type_err
-                CALL fp2int
+                CALL bas_expr_paren_int
                 MOVR R0,R1
                 MVI@ R1,R0
                 CALL fpfromint
@@ -4419,9 +4517,7 @@ bas_expr7:      PROC
 
                 ; USR(v) Call and receive value
 @@USR:
-                CALL bas_expr_paren
-                BC bas_type_err
-                CALL fp2int
+                CALL bas_expr_paren_int
                 CALL @@indirect
                 CALL fpfromint
                 MOVR R0,R2
@@ -4457,9 +4553,7 @@ bas_expr7:      PROC
 
                 ; CHR$(val) Create string from ASCII
 @@CHR:
-                CALL bas_expr_paren
-                BC bas_type_err
-                CALL fp2int
+                CALL bas_expr_paren_int
                 PSHR R0
                 MVII #1,R0
                 CALL string_create_simple

@@ -14,7 +14,7 @@
                 ;                             for the first 4 digits. More precise exponent
                 ;                             handling for parsing floating-point numbers
                 ;                             using a table. Added tokenization parsing.
-                ; Revision date: Oct/30/2025. Now it can print the full fraction.
+                ; Revision date: Oct/30/2025. Now it can print the full fraction with rounding.
                 ;
 
                 ;
@@ -138,6 +138,10 @@ fpprint:        PROC
                 CLRC
                 RRC R0,1
                 RRC R1,1
+                ;
+                ; Generate fraction digits multiplying by 10.
+                ; The fraction spills out into the integer part.
+                ;
 @@18:
                 MOVR R0,R2
                 MOVR R1,R4
@@ -152,11 +156,11 @@ fpprint:        PROC
                 SWAP R2
                 SLR R2,2
                 SLR R2,2
-                ANDI #$0F,R2
-                ADDI #$30,R2
-                CMPI #_fraction+7,R3
+                ANDI #$0F,R2            ; Extract the digit.
+                ADDI #$30,R2            ; Convert to ASCII 0-9.
+                CMPI #_fraction+7,R3    ; The very last digit is used for rounding.
                 BEQ @@19
-                MVO@ R2,R3
+                MVO@ R2,R3              ; Save in buffer.
                 INCR R3
                 ANDI #$0FFF,R0          ; Remove result digit from fraction.
                 BNE @@18                ; Continue until all the fraction has been output.
@@ -167,8 +171,8 @@ fpprint:        PROC
                 ;
                 ; Round number using the last digit.
                 ;
-@@19:           CMPI #$35,R2
-                BNC @@20
+@@19:           CMPI #$35,R2            ; >5 ?
+                BNC @@20                ; No, jump.
                 MOVR R3,R1
 @@23:           CMPI #_fraction,R1
                 BEQ @@20
@@ -181,7 +185,7 @@ fpprint:        PROC
 @@22:           MVO@ R2,R1
                 BEQ @@23                ; Jump if carry found.
                 ;
-                ; Remove trailing zeroes.
+                ; Remove trailing zeroes, because tiny fraction or rounding.
                 ;
 @@20:           CMPI #_fraction,R3      ; If R3 is here, no fraction.
                 BEQ @@8
@@ -192,19 +196,18 @@ fpprint:        PROC
                 INCR R3
                 PSHR R2
                 PSHR R3
-                MVII #$2E,R0
+                MVII #$2E,R0            ; Output period.
                 CALL indirect_output
                 PULR R3
                 PULR R2
-                MVII #_fraction,R2
-@@24:           MVI@ R2,R0
-                PSHR R2
+                MVII #_fraction,R4
+@@24:           MVI@ R4,R0              ; Output fraction digits.
+                PSHR R4
                 PSHR R3
                 CALL indirect_output
                 PULR R3
-                PULR R2
-                INCR R2
-                CMPR R3,R2
+                PULR R4
+                CMPR R3,R4
                 BNC @@24
 @@8:
                 PULR PC

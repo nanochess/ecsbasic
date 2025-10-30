@@ -161,12 +161,20 @@ The following expression operators are supported:
     LPOS(expr)
     POINT(x,y)
     HEX$(expr)
+    COL0
+    COL1
+    COL2
+    COL3
+    COL4
+    COL5
+    COL6
+    COL7
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings nor bidimensional arrays.
 
 If you get an error, you can do debugging of the program by using PRINT to see the variables, and using GOTO to re-enter a program. RUN resets all variables.
 
-Given the slow speed of the CP1610 processor, my interpreter doesn't allow expressions for the target line of GOTO and GOSUB statements.
+Given the slow speed of the CP1610 processor, the interpreter doesn't allow expressions for the target line of GOTO and GOSUB statements.
 
 ![image](shot0004.gif)
 
