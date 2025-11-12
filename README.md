@@ -236,3 +236,10 @@ I've started a [thread in Atariage](https://forums.atariage.com/topic/385238-i-s
 * Meteors.
 * Road Race.
 
+## The reference booklet
+
+I've published a small booklet (33 pages) containing a full reference of the language, and includes the nine games for your typing pleasure.
+
+It is available from [lulu.com](https://www.lulu.com/shop/oscar-toledo-gutierrez/ecs-extended-basic-reference-and-example-programs/paperback/product-w47jjd2.html?page=1&pageSize=4)
+
+![image](README2.jpg)
