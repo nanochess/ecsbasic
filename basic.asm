@@ -256,7 +256,7 @@ MEMSET:
                 ; execution directly in _MAIN
                 ;
                 ; The 125 means year 2025.
-		; The 126 means year 2026.
+                ; The 126 means year 2026.
                 ;
 _TITLE:
                 BYTE 126, 'ECS Extended BASIC', 0
@@ -1615,7 +1615,7 @@ bas_cls:        PROC
                 CLRR R0
                 MVII #$000C,R1
                 CALL MEMSET
-                MVII #_mobs,R4      	; Erase sprites.
+                MVII #_mobs,R4          ; Erase sprites.
                 CLRR R0
                 MVII #$0008,R1
                 CALL MEMSET
@@ -2166,8 +2166,8 @@ bas_for:        PROC
                 CALL bas_expr           ; Evaluate once.
                 MVI bas_forptr,R5
                 ADDI #FOR.TO,R5
-		MVO@ R2,R5              ; Take note of the value.
-		MVO@ R3,R5
+                MVO@ R2,R5              ; Take note of the value.
+                MVO@ R3,R5
 
                 macro_get_next
                 CMPI #TOKEN_STEP,R0
@@ -2175,23 +2175,23 @@ bas_for:        PROC
                 CALL bas_expr           ; Evaluate once.
                 B @@4
 
-@@3:            CLRR R2			; 1.0
-		MVII #$003F,R3
+@@3:            CLRR R2                 ; 1.0
+                MVII #$003F,R3
                 DECR R4
 @@4:            MVI bas_forptr,R5
-		ADDI #FOR.STEP,R5
-		MVO@ R2,R5
-		MVO@ R3,R5
-		PSHR R4			; Save current execution point.
+                ADDI #FOR.STEP,R5
+                MVO@ R2,R5
+                MVO@ R3,R5
+                PSHR R4                 ; Save current execution point.
                 CALL get_next_point
                 MVI bas_forptr,R3
                 ADDI #FOR.PARSE,R3
                 MVO@ R4,R3              ; Parsing position.
-                INCR R3			; Assumes position of FOR.LINE
+                INCR R3                 ; Assumes position of FOR.LINE
                 MVO@ R1,R3              ; Line.
-                INCR R3			; Assumes position of FOR.LENGTH
+                INCR R3                 ; Assumes position of FOR.LENGTH
                 MVO R3,bas_forptr
-                PULR R4			; Restore current execution point.
+                PULR R4                 ; Restore current execution point.
                 PULR PC
 @@1:
                 MVII #ERR_FOR,R0
@@ -2232,27 +2232,27 @@ bas_next:       PROC
                 MVI bas_forptr,R3       ; Use most recent FOR.
                 CMPI #start_for,R3
                 BEQ @@0
-		SUBI #FOR.LENGTH,R3
+                SUBI #FOR.LENGTH,R3
 @@4:            PSHR R4
                 MOVR R3,R5
                 MVI@ R5,R4              ; Variable address.
                 PSHR R4
                 MVI@ R4,R0              ; Read value
                 MVI@ R4,R1
-		MVI@ R5,R2		; Read STEP value.
-		MVI@ R5,R3
+                MVI@ R5,R2              ; Read STEP value.
+                MVI@ R5,R3
                 PSHR R5
-                MVO R3,temp1		; Save exponent + sign.
+                MVO R3,temp1            ; Save exponent + sign.
                 CALL fpadd              ; Do addition/subtraction.
                 PULR R5
                 PULR R4
                 MVO@ R0,R4              ; Save new value.
                 MVO@ R1,R4
                 MVI@ R5,R2              ; Read TO value.
-		MVI@ R5,R3
+                MVI@ R5,R3
                 PSHR R5
-                MVI temp1,R4		; Read saved exponent + sign.
-                ANDI #$80,R4		; Test sign.
+                MVI temp1,R4            ; Read saved exponent + sign.
+                ANDI #$80,R4            ; Test sign.
                 BEQ @@7
                 CALL fpcomp
                 BC @@8
@@ -2264,7 +2264,7 @@ bas_next:       PROC
 
 @@8:            PULR R5
                 PULR R4                 ; Previous parsing position (ignored)
-                MVI@ R5,R4		; Restart parsing at loop.
+                MVI@ R5,R4              ; Restart parsing at loop.
                 MVI@ R5,R1
                 MVO R1,bas_curline
                 PULR R5
@@ -2272,7 +2272,7 @@ bas_next:       PROC
 
 @@9:            PULR R5
                 PULR R4
-		SUBI #FOR.PARSE,R5
+                SUBI #FOR.PARSE,R5
                 MVO R5,bas_forptr
                 PULR PC
 
