@@ -61,6 +61,10 @@
                 ;                             Speed up of constant integer expression handling.
                 ;                             The text editor is now full-screen. Tokenized
                 ;                             buffer is now 80 words (3 to 4 screen rows).
+                ; Revision date: Jan/22/2026. Esc key isn't accepted at main loop. The FOR
+                ;                             statement saves precalculated values for
+                ;                             TO and STEP (70% speed up). CLS erases
+                ;                             sprites.
                 ;
 
                 ;
@@ -177,8 +181,8 @@ KEY.LEFT        EQU $1C                 ; \   Can't be generated otherwise, so p
 KEY.RIGHT       EQU $1D                 ;  |_ candidates.  Could alternately send 8 for
 KEY.UP          EQU $1E                 ;  |  left... not sure...
 KEY.DOWN        EQU $1F                 ; /
-KEY.ENTER       EQU $A                  ; Newline
-KEY.ESC         EQU 27
+KEY.ENTER       EQU $0A                 ; Newline
+KEY.ESC         EQU $1B
 KEY.NONE        EQU $FF
 
                 ;
@@ -187,6 +191,17 @@ KEY.NONE        EQU $FF
 BAS_CR:         EQU $0d                 ; Carriage Return.
 BAS_LF:         EQU $0a                 ; Line Feed.
 BAS_BS:         EQU $1C                 ; Same as KEY.LEFT
+
+                ;
+                ; FOR stack definitions.
+                ;
+FOR.VAR:        EQU 0                   ; Variable address.
+FOR.STEP:       EQU 1                   ; STEP constant.
+FOR.TO:         EQU 3                   ; TO constant.
+FOR.PARSE:      EQU 5                   ; Parse restart position.
+FOR.LINE:       EQU 6                   ; Line restart position.
+FOR.LENGTH:     EQU 7                   ; Length of a FOR loop in the stack.
+
 
 BACKTAB:        equ $0200               ; Base of the screen.
 STACK:          equ $02f0               ; Base stack pointer.
@@ -241,9 +256,10 @@ MEMSET:
                 ; execution directly in _MAIN
                 ;
                 ; The 125 means year 2025.
+		; The 126 means year 2026.
                 ;
 _TITLE:
-                BYTE 125, 'ECS Extended BASIC', 0
+                BYTE 126, 'ECS Extended BASIC', 0
 
                 ;
                 ; Main program
@@ -420,6 +436,8 @@ main_loop:
                 CALL SCAN_KBD_DEBOUNCE  ; Explore the keyboard.
                 CMPI #KEY.NONE,R0
                 BEQ @@0
+                CMPI #KEY.ESC,R0        ; Pressed Esc?
+                BEQ @@0                 ; Yes, ignore (probably bouncing key)
                 CALL bas_restore_cursor ; Restore the content under the cursor.
                 CMPI #KEY.ENTER,R0      ; Pressed Enter/Return?
                 BNE @@1                 ; No, jump.
@@ -457,6 +475,7 @@ main_loop:
 @@3:
                 CALL bas_mark_line
                 B main_loop
+
 @@1:
                 CALL bas_output         ; Output the typed key.
                 MVI bas_ttypos,R0
@@ -703,7 +722,7 @@ keywords:
 at_line:
                 DECLE " at ",0
 errors:
-                DECLE "ECS extended BASIC",$0d,$0a,"(c)2025 nanochess",0
+                DECLE "ECS extended BASIC",$0d,$0a,"(c)2026 nanochess",0
                 DECLE "Syntax error",0
                 DECLE "STOP",0
                 DECLE "Undefined",0
@@ -1596,6 +1615,10 @@ bas_cls:        PROC
                 CLRR R0
                 MVII #$000C,R1
                 CALL MEMSET
+                MVII #_mobs,R4      	; Erase sprites.
+                CLRR R0
+                MVII #$0008,R1
+                CALL MEMSET
                 PULR R4
                 PULR PC
                 ENDP
@@ -2121,6 +2144,7 @@ bas_for:        PROC
                 MVI bas_forptr,R5
                 CMPI #end_for-5,R5      ; Check if space available for FOR?
                 BC @@1                  ; No, jump.
+
                 ; Try an assignment
                 macro_get_next
                 CALL get_var_addr       ; Get variable address.
@@ -2135,38 +2159,39 @@ bas_for:        PROC
                 PULR R5
                 MVO@ R2,R5              ; Assign initial value.
                 MVO@ R3,R5
+
                 macro_get_next
                 CMPI #TOKEN_TO,R0       ; TO
                 BNE @@2
-                MVI bas_forptr,R3
-                INCR R3
-                INCR R3
-                MVO@ R4,R3              ; Take note of TO expression.
                 CALL bas_expr           ; Evaluate once.
+                MVI bas_forptr,R5
+                ADDI #FOR.TO,R5
+		MVO@ R2,R5              ; Take note of the value.
+		MVO@ R3,R5
+
                 macro_get_next
-                MVI bas_forptr,R3
-                INCR R3
                 CMPI #TOKEN_STEP,R0
                 BNE @@3
-                MVO@ R4,R3              ; Take note of STEP expression.
                 CALL bas_expr           ; Evaluate once.
                 B @@4
 
-@@3:            CLRR R2
-                MVO@ R2,R3              ; No STEP expression.
+@@3:            CLRR R2			; 1.0
+		MVII #$003F,R3
                 DECR R4
-@@4:            PSHR R4
+@@4:            MVI bas_forptr,R5
+		ADDI #FOR.STEP,R5
+		MVO@ R2,R5
+		MVO@ R3,R5
+		PSHR R4			; Save current execution point.
                 CALL get_next_point
                 MVI bas_forptr,R3
-                INCR R3
-                INCR R3
-                INCR R3
+                ADDI #FOR.PARSE,R3
                 MVO@ R4,R3              ; Parsing position.
-                INCR R3
+                INCR R3			; Assumes position of FOR.LINE
                 MVO@ R1,R3              ; Line.
-                INCR R3
+                INCR R3			; Assumes position of FOR.LENGTH
                 MVO R3,bas_forptr
-                PULR R4
+                PULR R4			; Restore current execution point.
                 PULR PC
 @@1:
                 MVII #ERR_FOR,R0
@@ -2198,57 +2223,34 @@ bas_next:       PROC
                 MVI bas_forptr,R3
 @@3:            CMPI #start_for,R3
                 BEQ @@0
-                SUBI #5,R3
+                SUBI #FOR.LENGTH,R3
                 CMP@ R3,R1              ; Find in FOR stack
                 BNE @@3
                 B @@4
 
 @@2:            DECR R4
                 MVI bas_forptr,R3       ; Use most recent FOR.
-                DECR R3
-                DECR R3
-                DECR R3
-                DECR R3
-                DECR R3
+		SUBI #FOR.LENGTH,R3
 @@4:            PSHR R4
                 MOVR R3,R5
-                MVI@ R5,R3              ; Variable address.
-                PSHR R3
-                MVI@ R3,R0              ; Read value
-                INCR R3
-                MVI@ R3,R1
-                MVI@ R5,R4              ; Read STEP value.
+                MVI@ R5,R4              ; Variable address.
+                PSHR R4
+                MVI@ R4,R0              ; Read value
+                MVI@ R4,R1
+		MVI@ R5,R2		; Read STEP value.
+		MVI@ R5,R3
                 PSHR R5
-                TSTR R4
-                BEQ @@5
-                PSHR R0
-                PSHR R1
-                CALL bas_expr
-                PULR R1
-                PULR R0
-                B @@6
-@@5:
-                CLRR R2
-                MVII #$003F,R3          ; 1.0
-@@6:
-                MOVR R3,R4
-                ANDI #$80,R4
-                MVO R4,temp1
+                MVO R3,temp1		; Save exponent + sign.
                 CALL fpadd              ; Do addition/subtraction.
                 PULR R5
-                PULR R3
-                MVO@ R0,R3              ; Save new value.
-                INCR R3
-                MVO@ R1,R3
-                MVI@ R5,R4              ; Read TO value.
+                PULR R4
+                MVO@ R0,R4              ; Save new value.
+                MVO@ R1,R4
+                MVI@ R5,R2              ; Read TO value.
+		MVI@ R5,R3
                 PSHR R5
-                PSHR R0
-                PSHR R1
-                CALL bas_expr           ; Process TO expression.
-                PULR R1
-                PULR R0
-                MVI temp1,R4
-                TSTR R4
+                MVI temp1,R4		; Read saved exponent + sign.
+                ANDI #$80,R4		; Test sign.
                 BEQ @@7
                 CALL fpcomp
                 BC @@8
@@ -2268,9 +2270,7 @@ bas_next:       PROC
 
 @@9:            PULR R5
                 PULR R4
-                DECR R5
-                DECR R5
-                DECR R5
+		SUBI #FOR.STEP,R5
                 MVO R5,bas_forptr
                 PULR PC
 

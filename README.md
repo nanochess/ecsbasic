@@ -172,6 +172,8 @@ The following expression operators are supported:
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings nor bidimensional arrays.
 
+You can stop execution of a BASIC program by pressing the Esc key.
+
 If you get an error, you can do debugging of the program by using PRINT to see the variables, and using GOTO to re-enter a program. RUN resets all variables.
 
 The editor is full-screen, this means you can move the cursor up to the line you want to correct or edit, and type over it, and press Return to change it. Or in other words, you don't need to retype a BASIC line, just LIST it, edit it, and press Return.
