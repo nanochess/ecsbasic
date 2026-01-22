@@ -2230,6 +2230,8 @@ bas_next:       PROC
 
 @@2:            DECR R4
                 MVI bas_forptr,R3       ; Use most recent FOR.
+                CMPI #start_for,R3
+                BEQ @@0
 		SUBI #FOR.LENGTH,R3
 @@4:            PSHR R4
                 MOVR R3,R5
@@ -2261,8 +2263,8 @@ bas_next:       PROC
                 BC @@9
 
 @@8:            PULR R5
-                PULR R4                 ; Previous parsing position.
-                MVI@ R5,R4
+                PULR R4                 ; Previous parsing position (ignored)
+                MVI@ R5,R4		; Restart parsing at loop.
                 MVI@ R5,R1
                 MVO R1,bas_curline
                 PULR R5
@@ -2270,7 +2272,7 @@ bas_next:       PROC
 
 @@9:            PULR R5
                 PULR R4
-		SUBI #FOR.STEP,R5
+		SUBI #FOR.PARSE,R5
                 MVO R5,bas_forptr
                 PULR PC
 
