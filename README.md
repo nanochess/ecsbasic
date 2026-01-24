@@ -4,7 +4,7 @@
 
 ### (c) Copyright 2025 Oscar Toledo G.
 
-This a BASIC language for the Intellivision Entertainment Computer System. I intend to make it as a (better) replacement for the incredibly slow and limited Intellivision ECS BASIC.
+This a BASIC language interpreter for the Mattel Intellivision Entertainment Computer System (ECS) It replaces nicely the slow and limited Intellivision ECS BASIC.
 
 I wrote an article in two parts about its development, you can read [part1 here](https://nanochess.org/ecs_basic.html), [part2 here](https://nanochess.org/ecs_basic_2.html), and an [Atariage thread](https://forums.atariage.com/topic/384664-typing-basic-on-my-ecs/)
 
@@ -172,9 +172,9 @@ The following expression operators are supported:
     
 String support allows comparison between strings, string concatenation, and assorted functions. There's no support for arrays of strings nor bidimensional arrays.
 
-You can stop execution of a BASIC program by pressing the Esc key.
+You can stop the execution of a BASIC program by pressing the Esc key.
 
-If you get an error, you can do debugging of the program by using PRINT to see the variables, and using GOTO to re-enter a program. RUN resets all variables.
+If you get an error, you can debug the program by using PRINT to display the variables, and using GOTO to re-enter a program. RUN resets all variables.
 
 The editor is full-screen, this means you can move the cursor up to the line you want to correct or edit, and type over it, and press Return to change it. Or in other words, you don't need to retype a BASIC line, just LIST it, edit it, and press Return.
 
@@ -220,7 +220,7 @@ For real hardware, instead of cassette, you can use a PC computer and connect th
 
 The LPRINT, and LLIST statements are working in real hardware using a Mattel Aquarius printer. Never tested in emulation, because jzintv has a bug.
 
-If your printer doesn't come with the cable, here is a schematic of how you can build one: https://forums.atariage.com/topic/323929-aquarius-printer-technical-info-and-reverse-engineering/
+If your printer doesn't come with the cable, here is a schematic for building one: https://forums.atariage.com/topic/323929-aquarius-printer-technical-info-and-reverse-engineering/
 
 ![image](README1.jpg)
 
@@ -237,6 +237,10 @@ I've started a [thread in Atariage](https://forums.atariage.com/topic/385238-i-s
 * Chalice.
 * Meteors.
 * Road Race.
+
+And of course a single line program inspired by the classic C64 one liner (thanks to Tarzilla for the idea)
+
+![image](shot0021.gif)
 
 ## The reference booklet
 
