@@ -216,6 +216,8 @@ The LOAD, SAVE, and VERIFY statements are working in emulation and real hardware
 
 For real hardware, instead of cassette, you can use a PC computer and connect the "To tape" connector to the Mic input, and the "From tape" connector to the Line Out. I recommend using Audacity to handle the recording and playing. You need to amplify the recorded signal, Audacity chooses automatically the maximum level possible. It is suggested to save your recordings as WAV files.
 
+I've tested with a real cassette tape using a Mattel Aquarius Data Recorder, and it works just fine. You can use two stereo 3.5mm plug-to-plug cables, as monoaural cables aren't common anymore.
+
 ## Printer support
 
 The LPRINT, and LLIST statements are working in real hardware using a Mattel Aquarius printer. Never tested in emulation, because jzintv has a bug.
