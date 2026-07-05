@@ -2,7 +2,7 @@
 
 ## by Oscar Toledo G. https://nanochess.org/
 
-### (c) Copyright 2025 Oscar Toledo G.
+### (c) Copyright 2025-2026 Oscar Toledo G.
 
 This a BASIC language interpreter for the Mattel Intellivision Entertainment Computer System (ECS) It replaces nicely the slow and limited Intellivision ECS BASIC.
 
@@ -206,7 +206,7 @@ This game can be loaded using the jzintv emulator and the provided _tape_UFO.ecs
  
 ## Running the interpreter in real hardware
 
-You can load the ROM in a JLP-Flash cartridge for running the BASIC interpreter on a real Intellivision. You need the Mattel Intellivision ECS, as this peripheral provides the computer keyboard.
+You can load the ROM in a JLP-Flash or Backbit cartridge for running the BASIC interpreter on a real Intellivision. You need the Mattel Intellivision ECS, as this peripheral provides the computer keyboard.
 
 If you are using any other Flash cartridge, be sure to enable 16-bit RAM memory in the area $8000-$9fff (8K words). Most cartridges implement it as CC3 memory (Cuttle Cart 3) because it was the first to provide it.
 
